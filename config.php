@@ -48,41 +48,76 @@ $env = load_env_file(__DIR__ . '/.env');
 if (!function_exists('env_value')) {
     function env_value(array $env, string $name, string $default = ''): string
     {
-        if (isset($env[$name]) && trim((string)$env[$name]) !== '') {
-            return trim((string)$env[$name]);
-        }
-
         $processValue = getenv($name);
         if ($processValue !== false && trim((string)$processValue) !== '') {
             return trim((string)$processValue);
+        }
+
+        if (isset($env[$name]) && trim((string)$env[$name]) !== '') {
+            return trim((string)$env[$name]);
         }
 
         return $default;
     }
 }
 
-$isHttps = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+$isHttps = !empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off';
 $dbHost = env_value($env, 'DB_HOST', '127.0.0.1');
 $dbPort = (int)env_value($env, 'DB_PORT', '3306');
 $dbName = env_value($env, 'DB_NAME', 'mi_crud_local');
 $dbUser = env_value($env, 'DB_USER', 'root');
 $dbPassword = env_value($env, 'DB_PASSWORD', env_value($env, 'DB_PASS', ''));
-$appEnv = env_value($env, 'APP_ENV', 'local');
+$appEnv = strtolower(env_value($env, 'APP_ENV', 'local'));
 $hcaptchaSitekey = env_value($env, 'HCAPTCHA_SITEKEY');
 $hcaptchaSecret = env_value($env, 'HCAPTCHA_SECRET');
 $googleClientId = env_value($env, 'GOOGLE_CLIENT_ID_OAUTH');
 $googleClientSecret = env_value($env, 'GOOGLE_SECRET_CLIENT');
 $googleRedirectUri = env_value($env, 'GOOGLE_OAUTH_REDIRECT_URI');
 
-if ($appEnv === 'production' && ($dbHost === '127.0.0.1' || $dbName === 'mi_crud_local' || $dbUser === 'root')) {
-    error_log('Production database environment variables are not configured.');
+if (!in_array($appEnv, ['local', 'staging', 'production'], true)) {
+    error_log('Invalid APP_ENV value.');
     http_response_code(500);
     exit('Application configuration unavailable.');
+}
+
+if ($dbPort < 1 || $dbPort > 65535) {
+    error_log('Invalid database port.');
+    http_response_code(500);
+    exit('Application configuration unavailable.');
+}
+
+if ($appEnv === 'production') {
+    $invalidProductionDatabase = $dbHost === ''
+        || in_array(strtolower($dbHost), ['127.0.0.1', 'localhost'], true)
+        || $dbName === ''
+        || $dbName === 'mi_crud_local'
+        || $dbUser === ''
+        || strtolower($dbUser) === 'root'
+        || $dbPassword === '';
+
+    if ($invalidProductionDatabase || !$isHttps) {
+        error_log('Production database credentials or HTTPS are not configured.');
+        http_response_code(500);
+        exit('Application configuration unavailable.');
+    }
+
+    if ($hcaptchaSitekey === '' || $hcaptchaSecret === '') {
+        error_log('Production hCaptcha credentials are not configured.');
+        http_response_code(500);
+        exit('Application configuration unavailable.');
+    }
+
+    if ($googleRedirectUri !== '' && !str_starts_with(strtolower($googleRedirectUri), 'https://')) {
+        error_log('Production Google OAuth redirect URI must use HTTPS.');
+        http_response_code(500);
+        exit('Application configuration unavailable.');
+    }
 }
 
 header('X-Frame-Options: SAMEORIGIN');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
+header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
 
 $cspNonce = base64_encode(random_bytes(16));
 header("Content-Security-Policy: default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://js.hcaptcha.com 'nonce-{$cspNonce}'; style-src 'self' https://cdnjs.cloudflare.com; style-src-attr 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' https://cdnjs.cloudflare.com; frame-src https://hcaptcha.com https://*.hcaptcha.com; connect-src 'self' https://hcaptcha.com https://*.hcaptcha.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'");
@@ -113,7 +148,10 @@ try {
         echo json_encode(['success' => false, 'ok' => false, 'error' => 'Servicio de base de datos no disponible.'], JSON_UNESCAPED_UNICODE);
         exit;
     }
-    exit('Error PDO: [' . $e->getCode() . '] ' . $e->getMessage());
+    if ($appEnv === 'local') {
+        exit('Error PDO: [' . $e->getCode() . '] ' . $e->getMessage());
+    }
+    exit('Service temporarily unavailable.');
 }
 
 if (session_status() === PHP_SESSION_NONE) {
