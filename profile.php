@@ -23,6 +23,14 @@ if (!$profile) {
     redirect('index.php');
 }
 
+$statsStmt = $pdo->prepare('SELECT COUNT(DISTINCT c.id) AS comment_count,
+                                  COUNT(v.id) AS received_likes
+                           FROM comentarios c
+                           LEFT JOIN votos v ON v.comentario_id = c.id AND v.tipo_voto = \'like\'
+                           WHERE c.usuario_id = :usuario_id');
+$statsStmt->execute([':usuario_id' => $userId]);
+$stats = $statsStmt->fetch() ?: ['comment_count' => 0, 'received_likes' => 0];
+
 $isOwner = is_logged_in() && (int)$profile['id'] === (int)$_SESSION['user_id'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isOwner) {
@@ -97,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isOwner) {
     redirect('profile.php?id=' . $userId);
 }
 
-$comments = $pdo->prepare('SELECT id, contenido, created_at FROM comentarios WHERE usuario_id = :usuario_id ORDER BY created_at DESC');
+$comments = $pdo->prepare('SELECT id, contenido, created_at, updated_at FROM comentarios WHERE usuario_id = :usuario_id ORDER BY created_at DESC');
 $comments->execute([':usuario_id' => $userId]);
 $userComments = $comments->fetchAll();
 
@@ -148,6 +156,7 @@ if (!empty($profile['avatar']) && is_string($profile['avatar'])) {
                 <div>
                     <h1><?= e($profile['username']); ?></h1>
                     <div class="profile-meta">Email: <?= e($profile['email']); ?></div>
+                    <div class="profile-meta">Comentarios: <?= (int)$stats['comment_count']; ?> · Me gusta recibidos: <?= (int)$stats['received_likes']; ?></div>
                     <?php if ($isOwner): ?>
                         <div class="profile-meta">Este es tu perfil.</div>
                     <?php endif; ?>
@@ -190,6 +199,9 @@ if (!empty($profile['avatar']) && is_string($profile['avatar'])) {
                             </time>
                         </div>
                         <div><?= nl2br(e($comment['contenido'])); ?></div>
+                        <?php if ((string)$comment['created_at'] !== (string)($comment['updated_at'] ?? $comment['created_at'])): ?>
+                            <div class="meta">(editado)</div>
+                        <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
             <?php endif; ?>
