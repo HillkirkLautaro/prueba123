@@ -22,7 +22,8 @@ jobs:
           # Ruta remota en tu hosting (ej. /htdocs o /public_html)
           server-dir: htdocs/ 
           # Opciones útiles:
-          # exclude: |
-          #   **/.git*
-          #   **/.git*/**
+          exclude: |
+            **/.git*
+            **/.git*/**
+            uploads/**
           #   uploads/**
