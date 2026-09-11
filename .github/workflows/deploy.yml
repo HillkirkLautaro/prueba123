@@ -1,0 +1,28 @@
+name: Despliegue Automático
+
+on:
+  push:
+    branches:
+      - main # O 'master', según el nombre de tu rama principal
+
+jobs:
+  web-deploy:
+    name: Desplegar a Producción
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener el código más reciente
+        uses: actions/checkout@v4
+
+      - name: Sincronizar archivos por FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          # Ruta remota en tu hosting (ej. /htdocs o /public_html)
+          server-dir: htdocs/ 
+          # Opciones útiles:
+          # exclude: |
+          #   **/.git*
+          #   **/.git*/**
+          #   uploads/**

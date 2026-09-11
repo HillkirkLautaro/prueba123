@@ -1,0 +1,16 @@
+Options -Indexes
+
+<FilesMatch "\.(?:php|php[0-9]+|phtml|phar|cgi|pl|py|sh)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order Allow,Deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule \.(?:php|php[0-9]+|phtml|phar|cgi|pl|py|sh)$ - [F,NC,L]
+</IfModule>
