@@ -61,7 +61,10 @@ if (!function_exists('env_value')) {
     }
 }
 
-$isHttps = !empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off';
+$isHttps = (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off')
+    || ($_SERVER['SERVER_PORT'] ?? 0) == 443
+    || strtolower($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https'
+    || strtolower($_SERVER['HTTP_X_FORWARDED_SSL'] ?? '') === 'on';
 $dbHost = env_value($env, 'DB_HOST', '127.0.0.1');
 $dbPort = (int)env_value($env, 'DB_PORT', '3306');
 $dbName = env_value($env, 'DB_NAME', 'mi_crud_local');
