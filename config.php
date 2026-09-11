@@ -105,6 +105,14 @@ try {
 } catch (PDOException $e) {
     error_log('DB connection failed [' . $e->getCode() . '] for host ' . $dbHost . ', database ' . $dbName . ': ' . $e->getMessage());
     http_response_code(503);
+    $isAjaxRequest = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'fetch'
+        || str_contains((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json')
+        || ($_GET['ajax'] ?? '') === '1';
+    if ($isAjaxRequest) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['success' => false, 'ok' => false, 'error' => 'Servicio de base de datos no disponible.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     exit('Error PDO: [' . $e->getCode() . '] ' . $e->getMessage());
 }
 

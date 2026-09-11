@@ -5,16 +5,23 @@ declare(strict_types=1);
 require __DIR__ . '/config.php';
 require __DIR__ . '/csrf.php';
 
+function delete_error(string $message): void
+{
+    $_SESSION['flash'] = ['type' => 'error', 'message' => $message];
+    redirect('index.php');
+}
+
 if (!is_logged_in()) {
     redirect('login.php');
 }
 
-$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$id = $_SERVER['REQUEST_METHOD'] === 'POST'
+    ? (int)($_POST['id'] ?? 0)
+    : (int)($_GET['id'] ?? 0);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_valid($_POST['csrf_token'] ?? null)) {
-        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Token CSRF inválido.'];
-        redirect('index.php');
+        delete_error('Token CSRF inválido.');
     }
 
     $stmt = $pdo->prepare('DELETE FROM comentarios WHERE id = :id AND usuario_id = :usuario_id');
@@ -24,8 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ]);
 
     if (!$result || $stmt->rowCount() === 0) {
-        $_SESSION['flash'] = ['type' => 'error', 'message' => 'No tienes permisos para borrar este comentario.'];
-        redirect('index.php');
+        delete_error('No tienes permisos para borrar este comentario.');
     }
 
     $_SESSION['flash'] = ['type' => 'success', 'message' => 'Comentario eliminado.'];
