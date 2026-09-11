@@ -46,18 +46,19 @@ if (!function_exists('load_env_file')) {
 $env = load_env_file(__DIR__ . '/.env');
 
 if (!function_exists('env_value')) {
-function env_value(array $env, string $name, string $default = ''): string
-{
-    if (isset($env[$name]) && $env[$name] !== '') {
-        return (string)$env[$name];
+    function env_value(array $env, string $name, string $default = ''): string
+    {
+        if (isset($env[$name]) && trim((string)$env[$name]) !== '') {
+            return trim((string)$env[$name]);
+        }
+
+        $processValue = getenv($name);
+        if ($processValue !== false && trim((string)$processValue) !== '') {
+            return trim((string)$processValue);
+        }
+
+        return $default;
     }
-
-    $processValue = getenv($name);
-
-    return $processValue !== false && $processValue !== ''
-        ? (string)$processValue
-        : $default;
-}
 }
 
 $isHttps = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
@@ -65,7 +66,7 @@ $dbHost = env_value($env, 'DB_HOST', '127.0.0.1');
 $dbPort = (int)env_value($env, 'DB_PORT', '3306');
 $dbName = env_value($env, 'DB_NAME', 'mi_crud_local');
 $dbUser = env_value($env, 'DB_USER', 'root');
-$dbPassword = env_value($env, 'DB_PASSWORD', env_value($env, 'DB_PASS'));
+$dbPassword = env_value($env, 'DB_PASSWORD', env_value($env, 'DB_PASS', ''));
 $appEnv = env_value($env, 'APP_ENV', 'local');
 $hcaptchaSitekey = env_value($env, 'HCAPTCHA_SITEKEY');
 $hcaptchaSecret = env_value($env, 'HCAPTCHA_SECRET');
@@ -104,7 +105,7 @@ try {
 } catch (PDOException $e) {
     error_log('DB connection failed [' . $e->getCode() . '] for host ' . $dbHost . ', database ' . $dbName . ': ' . $e->getMessage());
     http_response_code(503);
-    exit('Database unavailable.');
+    exit('Error PDO: [' . $e->getCode() . '] ' . $e->getMessage());
 }
 
 if (session_status() === PHP_SESSION_NONE) {
