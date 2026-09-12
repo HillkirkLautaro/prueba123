@@ -22,15 +22,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Completa la verificación anti-bot.'];
         redirect('login.php');
     }
+    $usernameRaw = $_POST['username'] ?? null;
+    $passwordRaw = $_POST['password'] ?? null;
 
-    $username = trim((string)($_POST['username'] ?? ''));
-    $password = (string)($_POST['password'] ?? '');
-
-    if ($username === '' || $password === '') {
-        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Usuario y contraseña son obligatorios.'];
+    if (!is_string($usernameRaw) || !is_string($passwordRaw)) {
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Datos inválidos.'];
         redirect('login.php');
     }
 
+    $username = trim($usernameRaw);
+    $password = $passwordRaw;
+
+    if (
+        !preg_match('/^[A-Za-z0-9_]{3,50}$/', $username) ||
+        $password === '' ||
+        strlen($password) > 72 // requerido si se conserva PASSWORD_BCRYPT
+    ) {
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Credenciales inválidas.'];
+        redirect('login.php');
+    }
     $stmt = $pdo->prepare('SELECT id, username, email, password FROM usuarios WHERE username = :username LIMIT 1');
     $stmt->execute([':username' => $username]);
     $user = $stmt->fetch();
@@ -44,6 +54,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $_SESSION['user_id'] = (int)$user['id'];
     $_SESSION['username'] = $user['username'];
     $_SESSION['email'] = $user['email'];
+    $_SESSION['auth_time'] = time();
+    $_SESSION['last_activity'] = time();
 
     $_SESSION['flash'] = ['type' => 'success', 'message' => 'Sesión iniciada.'];
     redirect('index.php');

@@ -33,6 +33,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         error_log('Notifications unavailable: ' . $exception->getMessage());
     }
 
+    // Esta respuesta se consulta periódicamente desde el navegador. Evitar que
+    // un proxy o el navegador entregue una versión anterior es importante.
+    header('Cache-Control: no-store, max-age=0');
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode([
         'notifications' => $items,

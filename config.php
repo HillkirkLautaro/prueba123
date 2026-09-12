@@ -70,7 +70,7 @@ $dbPort = (int)env_value($env, 'DB_PORT', '3306');
 $dbName = env_value($env, 'DB_NAME', 'mi_crud_local');
 $dbUser = env_value($env, 'DB_USER', 'root');
 $dbPassword = env_value($env, 'DB_PASSWORD', env_value($env, 'DB_PASS', ''));
-$appEnv = strtolower(env_value($env, 'APP_ENV', 'local'));
+$appEnv = strtolower(env_value($env, 'APP_ENV', 'production'));
 $hcaptchaSitekey = env_value($env, 'HCAPTCHA_SITEKEY');
 $hcaptchaSecret = env_value($env, 'HCAPTCHA_SECRET');
 $googleClientId = env_value($env, 'GOOGLE_CLIENT_ID_OAUTH');
@@ -141,7 +141,7 @@ try {
         ]
     );
 } catch (PDOException $e) {
-    error_log('DB connection failed [' . $e->getCode() . '] for host ' . $dbHost . ', database ' . $dbName . ': ' . $e->getMessage());
+    error_log('Database connection failed. PDO code: ' . $e->getCode());
     http_response_code(503);
     $isAjaxRequest = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'fetch'
         || str_contains((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json')
@@ -151,10 +151,7 @@ try {
         echo json_encode(['success' => false, 'ok' => false, 'error' => 'Servicio de base de datos no disponible.'], JSON_UNESCAPED_UNICODE);
         exit;
     }
-    if ($appEnv === 'local') {
-        exit('Error PDO: [' . $e->getCode() . '] ' . $e->getMessage());
-    }
-    exit('Service temporarily unavailable.');
+    exit('Servicio temporalmente no disponible.');
 }
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -163,6 +160,41 @@ if (session_status() === PHP_SESSION_NONE) {
         'cookie_samesite' => 'Lax',
         'cookie_secure' => $isHttps,
     ]);
+}
+
+const SESSION_IDLE_TIMEOUT = 1800;
+
+if (isset($_SESSION['user_id'])) {
+    $lastActivity = $_SESSION['last_activity'] ?? null;
+    $sessionExpired = !is_int($lastActivity)
+        || $lastActivity < 1
+        || time() - $lastActivity > SESSION_IDLE_TIMEOUT;
+
+    if ($sessionExpired) {
+        $_SESSION = [];
+
+        if (ini_get('session.use_cookies')) {
+            $params = session_get_cookie_params();
+            setcookie(session_name(), '', [
+                'expires' => time() - 42000,
+                'path' => $params['path'],
+                'domain' => $params['domain'],
+                'secure' => $params['secure'],
+                'httponly' => $params['httponly'],
+                'samesite' => $params['samesite'] ?? 'Lax',
+            ]);
+        }
+
+        session_destroy();
+        session_id('');
+        session_start([
+            'cookie_httponly' => true,
+            'cookie_samesite' => 'Lax',
+            'cookie_secure' => $isHttps,
+        ]);
+    } else {
+        $_SESSION['last_activity'] = time();
+    }
 }
 
 if (!function_exists('is_logged_in')) {

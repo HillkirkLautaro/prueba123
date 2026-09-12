@@ -22,18 +22,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Completa la verificación anti-bot.'];
         redirect('register.php');
     }
-
-    $username = trim((string)($_POST['username'] ?? ''));
-    $email = trim((string)($_POST['email'] ?? ''));
-    $password = (string)($_POST['password'] ?? '');
-
-    if ($username === '' || $email === '' || $password === '') {
-        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Todos los campos son obligatorios.'];
+    $usernameRaw = $_POST['username'] ?? null;
+    $passwordRaw = $_POST['password'] ?? null;
+    $emailRaw = $_POST['email'] ?? null;
+    
+    if (!is_string($usernameRaw) || !is_string($emailRaw) || !is_string($passwordRaw)) {
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Datos inválidos.'];
         redirect('register.php');
     }
 
-    if (!preg_match('/^[A-Za-z0-9_]{3,50}$/', $username)) {
-        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Usuario inválido. Use 3-50 caracteres: letras, números o _.'];
+    $username = trim($usernameRaw);
+    $email = trim($emailRaw);
+    $password = $passwordRaw;
+
+    if (
+        !preg_match('/^[A-Za-z0-9_]{3,50}$/', $username) ||
+        $email === '' ||
+        strlen($email) > 254 ||
+        $password === '' ||
+        strlen($password) > 72
+    ) {
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Datos de registro inválidos.'];
         redirect('register.php');
     }
 
@@ -58,13 +67,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('register.php');
     }
 
-    $hash = password_hash($password, PASSWORD_BCRYPT);
-    $stmt = $pdo->prepare('INSERT INTO usuarios (username, email, password, created_at) VALUES (:username, :email, :password, NOW())');
-    $stmt->execute([
-        ':username' => $username,
-        ':email' => $email,
-        ':password' => $hash,
-    ]);
+    try {
+        $stmt = $pdo->prepare(
+            'INSERT INTO usuarios (username, email, password, created_at)
+             VALUES (:username, :email, :password, UTC_TIMESTAMP())'
+        );
+        $stmt->execute([
+            ':username' => $username,
+            ':email' => $email,
+            ':password' => password_hash($password, PASSWORD_BCRYPT),
+        ]);
+    } catch (PDOException $exception) {
+        if ($exception->getCode() === '23000') {
+            $_SESSION['flash'] = ['type' => 'error', 'message' => 'El usuario o correo ya existen.'];
+            redirect('register.php');
+        }
+
+        throw $exception;
+    }
 
     session_regenerate_id(true);
     $_SESSION['flash'] = ['type' => 'success', 'message' => 'Registro exitoso. Inicia sesión.'];

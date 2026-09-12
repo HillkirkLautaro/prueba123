@@ -74,12 +74,17 @@ $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 
 $notifications = [];
+$unreadCount = 0;
 if (is_logged_in()) {
     try {
         $notificationStmt = $pdo->prepare('SELECT id, comentario_id, mensaje, leido, created_at FROM notificaciones
-                                            WHERE usuario_id = :usuario_id ORDER BY created_at DESC LIMIT 5');
+                                            WHERE usuario_id = :usuario_id ORDER BY created_at DESC LIMIT 10');
         $notificationStmt->execute([':usuario_id' => (int)$_SESSION['user_id']]);
         $notifications = $notificationStmt->fetchAll();
+
+        $unreadNotificationStmt = $pdo->prepare('SELECT COUNT(*) FROM notificaciones WHERE usuario_id = :usuario_id AND leido = 0');
+        $unreadNotificationStmt->execute([':usuario_id' => (int)$_SESSION['user_id']]);
+        $unreadCount = (int)$unreadNotificationStmt->fetchColumn();
     } catch (PDOException $exception) {
         $notifications = [];
         error_log('Notifications unavailable: ' . $exception->getMessage());
@@ -97,7 +102,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
         redirect('index.php');
     }
 
-    $contenido = trim((string)($_POST['contenido'] ?? ''));
+    
+    $rawContent = $_POST['contenido'] ?? null;
+
+    if (!is_string($rawContent)) {
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Contenido inválido.'];
+        redirect('index.php');
+    }
+
+    $contenido = trim($rawContent);
+
+    if (
+        $contenido === '' ||
+        !mb_check_encoding($contenido, 'UTF-8') ||
+        mb_strlen($contenido, 'UTF-8') > 5000
+    ) {
+        $_SESSION['flash'] = [
+            'type' => 'error',
+            'message' => 'El comentario debe contener entre 1 y 5000 caracteres válidos.'
+        ];
+        redirect('index.php');
+    }
     if ($contenido === '') {
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'El comentario no puede estar vacío.'];
         redirect('index.php');
@@ -160,6 +185,8 @@ if ($comments) {
 }
 
 if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
+    header('Cache-Control: no-store, max-age=0');
+    header('Content-Type: text/html; charset=utf-8');
     foreach ($comments as $comment) {
         render_comment($comment, $repliesByParent[(int)$comment['id']] ?? [], $defaultAvatar);
     }
@@ -192,13 +219,12 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                     <div class="notification-menu">
                         <button type="button" class="notification-bell" id="notificationBell" aria-label="Abrir notificaciones" aria-expanded="false">
                             <span aria-hidden="true">&#128276;</span>
-                            <?php $unreadCount = count(array_filter($notifications, static fn (array $item): bool => (int)$item['leido'] === 0)); ?>
                             <span class="notification-count<?= $unreadCount === 0 ? ' is-hidden' : ''; ?>" id="notificationCount"><?= $unreadCount; ?></span>
                         </button>
                         <div class="notification-dropdown" id="notificationDropdown" hidden>
                             <div class="notification-dropdown-header">
                                 <strong>Notificaciones</strong>
-                                <span class="muted" id="notificationStatus">Se actualizan al volver a cargar</span>
+                                <span class="muted" id="notificationStatus" aria-live="polite">Actualización automática activa</span>
                             </div>
                             <div id="notificationList">
                                 <?php foreach ($notifications as $notification): ?>
@@ -216,7 +242,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                         </div>
                     </div>
                     <a class="btn btn-secondary" href="profile.php?id=<?= (int)$_SESSION['user_id']; ?>">Mi perfil</a>
-                    <a class="btn btn-secondary" href="logout.php">Cerrar sesión</a>
+                    <form method="post" action="logout.php" class="inline-form">
+                        <input type="hidden" name="csrf_token" value="<?= e(csrf_token()); ?>">
+                        <button type="submit" class="btn btn-secondary">Cerrar sesión</button>
+                    </form>
                 </div>
             <?php else: ?>
                 <div>
@@ -276,15 +305,176 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     <script nonce="<?= e($cspNonce); ?>">
         const bell = document.getElementById('notificationBell');
         const dropdown = document.getElementById('notificationDropdown');
-        if (bell && dropdown) {
+        const notificationCount = document.getElementById('notificationCount');
+        const notificationList = document.getElementById('notificationList');
+        const notificationStatus = document.getElementById('notificationStatus');
+
+        function formatNotificationDate(dateString) {
+            const normalizedDate = String(dateString).replace(' ', 'T');
+            const date = new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalizedDate)
+                ? normalizedDate
+                : normalizedDate + 'Z');
+            if (Number.isNaN(date.getTime())) {
+                return dateString;
+            }
+
+            try {
+                return new Intl.DateTimeFormat('es-AR', {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                    timeZoneName: 'short'
+                }).format(date);
+            } catch (error) {
+                return date.toLocaleString();
+            }
+        }
+
+        function renderNotifications(notifications) {
+            notificationList.replaceChildren();
+
+            if (!notifications.length) {
+                const emptyMessage = document.createElement('p');
+                emptyMessage.className = 'muted';
+                emptyMessage.textContent = 'No tienes notificaciones.';
+                notificationList.append(emptyMessage);
+                return;
+            }
+
+            notifications.forEach(function (notification) {
+                const item = document.createElement('div');
+                item.className = 'notification-item' + (Number(notification.leido) === 0 ? ' unread' : '');
+
+                const link = document.createElement('a');
+                link.className = 'notification-link';
+                link.href = 'index.php#comment-' + encodeURIComponent(notification.comentario_id);
+                link.dataset.commentId = notification.comentario_id;
+                link.textContent = notification.mensaje;
+
+                const time = document.createElement('time');
+                time.className = 'meta local-datetime';
+                time.dateTime = String(notification.created_at).replace(' ', 'T') + 'Z';
+                time.textContent = formatNotificationDate(notification.created_at);
+
+                item.append(link, time);
+                notificationList.append(item);
+            });
+        }
+
+        let notificationRequestInFlight = false;
+        async function refreshNotifications() {
+            if (notificationRequestInFlight || document.hidden || !notificationList) {
+                return;
+            }
+
+            notificationRequestInFlight = true;
+            try {
+                const response = await fetch('notifications.php', {
+                    headers: { 'Accept': 'application/json' },
+                    cache: 'no-store',
+                    credentials: 'same-origin'
+                });
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
+                }
+
+                const payload = await response.json();
+                if (!Array.isArray(payload.notifications) || typeof payload.unread_count !== 'number') {
+                    throw new Error('Respuesta de notificaciones inválida');
+                }
+
+                renderNotifications(payload.notifications);
+                notificationCount.textContent = String(payload.unread_count);
+                notificationCount.classList.toggle('is-hidden', payload.unread_count === 0);
+                notificationStatus.textContent = 'Actualizado automáticamente';
+            } catch (error) {
+                // La interfaz inicial sigue disponible si falla momentáneamente la red.
+                notificationStatus.textContent = 'No se pudo actualizar; se reintentará';
+                console.warn('No se pudieron actualizar las notificaciones.', error);
+            } finally {
+                notificationRequestInFlight = false;
+            }
+        }
+
+        if (bell && dropdown && notificationCount && notificationList && notificationStatus) {
             bell.addEventListener('click', function () {
                 dropdown.hidden = !dropdown.hidden;
                 bell.setAttribute('aria-expanded', String(!dropdown.hidden));
+                if (!dropdown.hidden) {
+                    refreshNotifications();
+                }
             });
             document.addEventListener('click', function (event) {
                 if (!event.target.closest('.notification-menu')) {
                     dropdown.hidden = true;
                     bell.setAttribute('aria-expanded', 'false');
+                }
+            });
+
+            // InfinityFree no permite ejecutar un proceso WebSocket persistente.
+            // Un sondeo corto sólo en pestañas visibles ofrece notificaciones sin recargar.
+            window.setInterval(refreshNotifications, 8000);
+            document.addEventListener('visibilitychange', function () {
+                if (!document.hidden) {
+                    refreshNotifications();
+                }
+            });
+        }
+
+        const commentsList = document.getElementById('comments-list');
+        const emptyComments = document.getElementById('empty-comments');
+        let commentsRequestInFlight = false;
+        let lastCommentsHtml = null;
+
+        function formatDynamicDates(container) {
+            container.querySelectorAll('.local-datetime[datetime]').forEach(function (time) {
+                time.textContent = formatNotificationDate(time.dateTime);
+            });
+        }
+
+        async function refreshComments() {
+            const activeElement = document.activeElement;
+            const isWriting = activeElement && activeElement.matches('textarea, input, select');
+            const hasOpenCommentForm = commentsList && commentsList.querySelector('.reply-form:not([hidden]), .edit-comment-form:not([hidden])');
+            if (commentsRequestInFlight || document.hidden || !commentsList || isWriting || hasOpenCommentForm) {
+                return;
+            }
+
+            commentsRequestInFlight = true;
+            try {
+                const url = new URL(window.location.href);
+                url.searchParams.set('ajax', '1');
+                const response = await fetch(url.toString(), {
+                    headers: { 'Accept': 'text/html' },
+                    cache: 'no-store',
+                    credentials: 'same-origin'
+                });
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
+                }
+
+                const html = await response.text();
+                if (html !== lastCommentsHtml) {
+                    commentsList.innerHTML = html;
+                    commentsList.hidden = html.trim() === '';
+                    if (emptyComments) {
+                        emptyComments.hidden = html.trim() !== '';
+                    }
+                    formatDynamicDates(commentsList);
+                    lastCommentsHtml = html;
+                }
+            } catch (error) {
+                // Un error temporal no debe impedir que el usuario siga usando la página.
+                console.warn('No se pudieron actualizar los comentarios.', error);
+            } finally {
+                commentsRequestInFlight = false;
+            }
+        }
+
+        if (commentsList) {
+            window.setInterval(refreshComments, 8000);
+            document.addEventListener('visibilitychange', function () {
+                if (!document.hidden) {
+                    refreshComments();
                 }
             });
         }
