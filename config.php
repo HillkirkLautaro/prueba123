@@ -43,7 +43,7 @@ if (!function_exists('load_env_file')) {
     }
 }
 
-$env = load_env_file(__DIR__ . '/.env');
+$env = load_env_file(dirname(__DIR__) . '/.env');
 
 if (!function_exists('env_value')) {
     function env_value(array $env, string $name, string $default = ''): string
