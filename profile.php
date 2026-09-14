@@ -24,10 +24,10 @@ if (!$profile) {
 }
 
 $statsStmt = $pdo->prepare('SELECT COUNT(DISTINCT c.id) AS comment_count,
-                                  COUNT(v.id) AS received_likes
-                           FROM comentarios c
-                           LEFT JOIN votos v ON v.comentario_id = c.id AND v.tipo_voto = \'like\'
-                           WHERE c.usuario_id = :usuario_id');
+                                   COUNT(v.id) AS received_likes
+                            FROM comentarios c
+                            LEFT JOIN votos v ON v.comentario_id = c.id AND v.tipo_voto = \'like\'
+                            WHERE c.usuario_id = :usuario_id');
 $statsStmt->execute([':usuario_id' => $userId]);
 $stats = $statsStmt->fetch() ?: ['comment_count' => 0, 'received_likes' => 0];
 
@@ -94,6 +94,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isOwner) {
         redirect('profile.php?id=' . $userId);
     }
 
+    // Borrar avatar anterior si existe y no es el default para evitar acumular basura en el servidor
+    if (!empty($profile['avatar'])) {
+        $oldFilename = basename($profile['avatar']);
+        $oldPath = __DIR__ . '/uploads/avatars/' . $oldFilename;
+        if ($oldFilename !== 'default.png' && file_exists($oldPath)) {
+            @unlink($oldPath);
+        }
+    }
+
     $avatarPath = 'uploads/avatars/' . $safeName;
     $update = $pdo->prepare('UPDATE usuarios SET avatar = :avatar WHERE id = :id LIMIT 1');
     $update->execute([
@@ -113,23 +122,20 @@ $defaultAvatarRelative = 'uploads/avatars/default.png';
 $defaultAvatarAbsolute = __DIR__ . '/' . $defaultAvatarRelative;
 $defaultSvgDataUri = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" fill="#e5e7eb"/><circle cx="60" cy="46" r="22" fill="#9ca3af"/><path d="M24 100c8-18 29-28 36-28s28 10 36 28" fill="#9ca3af"/></svg>');
 
+// Asignación segura del avatar evitando variables indefinidas y previendo Path Traversal
+$avatar = $defaultSvgDataUri;
+
 if (!empty($profile['avatar']) && is_string($profile['avatar'])) {
-    $storedAvatarRelative = trim($profile['avatar']);
-    $storedAvatarAbsolute = __DIR__ . '/' . ltrim($storedAvatarRelative, '/');
-    $isStoredAvatarPathSafe = strpos($storedAvatarRelative, 'uploads/avatars/') === 0
-        && strpos($storedAvatarRelative, '..') === false
-        && basename($storedAvatarRelative) === basename($storedAvatarAbsolute);
-    if ($isStoredAvatarPathSafe && file_exists($storedAvatarAbsolute) && getimagesize($storedAvatarAbsolute) !== false) {
-        $avatar = $storedAvatarRelative;
-    } elseif (file_exists($defaultAvatarAbsolute) && getimagesize($defaultAvatarAbsolute) !== false) {
+    $avatarFilename = basename($profile['avatar']);
+    $storedAvatarAbsolute = __DIR__ . '/uploads/avatars/' . $avatarFilename;
+    
+    if (file_exists($storedAvatarAbsolute) && @getimagesize($storedAvatarAbsolute) !== false) {
+        $avatar = 'uploads/avatars/' . $avatarFilename;
+    } elseif (file_exists($defaultAvatarAbsolute) && @getimagesize($defaultAvatarAbsolute) !== false) {
         $avatar = $defaultAvatarRelative;
-    } else {
-        $avatar = $defaultSvgDataUri;
     }
-} elseif (file_exists($defaultAvatarAbsolute) && getimagesize($defaultAvatarAbsolute) !== false) {
+} elseif (file_exists($defaultAvatarAbsolute) && @getimagesize($defaultAvatarAbsolute) !== false) {
     $avatar = $defaultAvatarRelative;
-} else {
-    $avatar = $defaultSvgDataUri;
 }
 ?>
 <!doctype html>
