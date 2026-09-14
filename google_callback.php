@@ -106,6 +106,8 @@ unset($_SESSION['google_oauth_return_to']);
 $_SESSION['user_id'] = (int)$user['id'];
 $_SESSION['username'] = $user['username'];
 $_SESSION['email'] = $user['email'];
+$_SESSION['auth_time'] = time();
+$_SESSION['last_activity'] = time();
 $_SESSION['flash'] = ['type' => 'success', 'message' => 'Sesión iniciada con Google.'];
 redirect('index.php');
 
