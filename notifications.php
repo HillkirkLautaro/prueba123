@@ -15,6 +15,24 @@ if (!is_logged_in()) {
     redirect('login.php');
 }
 
+// Validar origen de peticiones AJAX
+if (!validate_ajax_origin()) {
+    http_response_code(403);
+    header('Content-Type: application/json; charset=utf-8');
+    header('X-Content-Type-Options: nosniff');
+    echo json_encode(['error' => 'Origen no permitido']);
+    exit;
+}
+
+// Validar Content-Type
+if (!validate_content_type(['application/x-www-form-urlencoded', 'multipart/form-data', 'application/json'])) {
+    http_response_code(415);
+    header('Content-Type: application/json; charset=utf-8');
+    header('X-Content-Type-Options: nosniff');
+    echo json_encode(['error' => 'Content-Type no soportado']);
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     try {
         $stmt = $pdo->prepare('SELECT id, comentario_id, mensaje, leido, created_at

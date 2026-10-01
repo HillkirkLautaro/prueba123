@@ -33,8 +33,21 @@ $stats = $statsStmt->fetch() ?: ['comment_count' => 0, 'received_likes' => 0];
 
 $isOwner = is_logged_in() && (int)$profile['id'] === (int)$_SESSION['user_id'];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isOwner) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!$isOwner) {
+        log_security_event('unauthorized_profile_update_attempt', "Target User: {$userId}, User: " . ($_SESSION['user_id'] ?? 'guest'));
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'No tienes permisos para editar este perfil.'];
+        redirect('profile.php?id=' . $userId);
+    }
+
+    if (!validate_request_origin()) {
+        log_security_event('invalid_profile_origin', "IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Origen no autorizado.'];
+        redirect('profile.php?id=' . $userId);
+    }
+
     if (!csrf_valid($_POST['csrf_token'] ?? null)) {
+        log_security_event('csrf_attempt', "Profile update attempt");
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Token CSRF inválido.'];
         redirect('profile.php?id=' . $userId);
     }
@@ -204,7 +217,7 @@ if (!empty($profile['avatar']) && is_string($profile['avatar'])) {
                                 <?= e($comment['created_at']); ?>
                             </time>
                         </div>
-                        <div><?= nl2br(e($comment['contenido'])); ?></div>
+                        <div><?= nl2br(sanitize_html(e($comment['contenido']))); ?></div>
                         <?php if ((string)$comment['created_at'] !== (string)($comment['updated_at'] ?? $comment['created_at'])): ?>
                             <div class="meta">(editado)</div>
                         <?php endif; ?>

@@ -30,6 +30,20 @@ if (!csrf_valid($_POST['csrf_token'] ?? null)) {
     action_error('Token CSRF inválido.');
 }
 
+// Validar origen de peticiones AJAX
+if (!validate_ajax_origin()) {
+    log_security_event('invalid_origin_attempt', "Action: {$action}");
+    http_response_code(403);
+    exit('Origen no permitido');
+}
+
+// Validar Content-Type
+if (!validate_content_type(['application/x-www-form-urlencoded', 'multipart/form-data', 'application/json'])) {
+    log_security_event('invalid_content_type', "Action: {$action}");
+    http_response_code(415);
+    exit('Content-Type no soportado');
+}
+
 $userId = (int)$_SESSION['user_id'];
 $action = (string)($_POST['action'] ?? '');
 $commentId = filter_var($_POST['comentario_id'] ?? null, FILTER_VALIDATE_INT);

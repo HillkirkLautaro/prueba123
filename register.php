@@ -13,7 +13,14 @@ $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!validate_request_origin()) {
+        log_security_event('invalid_registration_origin', "IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Origen no permitido.'];
+        redirect('register.php');
+    }
+
     if (!csrf_valid($_POST['csrf_token'] ?? null)) {
+        log_security_event('csrf_attempt', "Registration attempt");
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Token CSRF inválido.'];
         redirect('register.php');
     }
@@ -56,14 +63,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('register.php');
     }
 
-    $check = $pdo->prepare('SELECT id FROM usuarios WHERE username = :username OR email = :email LIMIT 1');
+    $check = $pdo->prepare('SELECT username, email FROM usuarios WHERE username = :username OR email = :email LIMIT 1');
     $check->execute([
         ':username' => $username,
         ':email' => $email,
     ]);
+    $existing = $check->fetch();
 
-    if ($check->fetch()) {
-        $_SESSION['flash'] = ['type' => 'error', 'message' => 'El usuario o correo ya existen.'];
+    if ($existing) {
+        // Mensaje genérico que no revela qué campo existe
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'No se pudo completar el registro. Intenta con otros datos.'];
         redirect('register.php');
     }
 

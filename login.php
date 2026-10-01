@@ -13,7 +13,14 @@ $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!validate_request_origin()) {
+        log_security_event('invalid_login_origin', "IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Origen no permitido.'];
+        redirect('login.php');
+    }
+
     if (!csrf_valid($_POST['csrf_token'] ?? null)) {
+        log_security_event('csrf_attempt', "Login attempt");
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Token CSRF inválido.'];
         redirect('login.php');
     }
@@ -22,6 +29,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Completa la verificación anti-bot.'];
         redirect('login.php');
     }
+    
+    // Rate limiting para prevenir fuerza bruta
+    $rateLimitKey = 'login_' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+    if (!check_rate_limit($rateLimitKey, 5, 300)) {
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Demasiados intentos. Intenta de nuevo en 5 minutos.'];
+        redirect('login.php');
+    }
+    
     $usernameRaw = $_POST['username'] ?? null;
     $passwordRaw = $_POST['password'] ?? null;
 
@@ -46,6 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = $stmt->fetch();
 
     if (!$user || !password_verify($password, $user['password'])) {
+        log_security_event('login_failed', "Username: {$username}");
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Credenciales incorrectas.'];
         redirect('login.php');
     }

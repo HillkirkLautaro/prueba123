@@ -23,7 +23,7 @@ function render_comment(array $comment, array $replies, string $defaultAvatar): 
             </div>
             <time class="meta local-datetime" datetime="<?= e(utc_datetime_iso($comment['created_at'])); ?>"><?= e((string)$comment['created_at']); ?></time>
         </div>
-        <div><?= nl2br(e((string)$comment['contenido'])); ?></div>
+        <div><?= nl2br(sanitize_html(e((string)$comment['contenido']))); ?></div>
         <div class="meta comment-meta">
             <?php if ($isEdited): ?> (editado) <?php endif; ?>
             <span class="likes-count"><?= (int)$comment['likes']; ?> Me gusta</span>
@@ -92,12 +92,19 @@ if (is_logged_in()) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create_comment') {
+    if (!validate_request_origin()) {
+        log_security_event('invalid_comment_creation_origin', "IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Origen no permitido.'];
+        redirect('index.php');
+    }
+
     if (!is_logged_in()) {
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Debes iniciar sesión para comentar.'];
         redirect('login.php');
     }
 
     if (!csrf_valid($_POST['csrf_token'] ?? null)) {
+        log_security_event('csrf_attempt', "Comment creation attempt");
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Token CSRF inválido.'];
         redirect('index.php');
     }
@@ -114,6 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
 
     if (
         $contenido === '' ||
+        mb_strlen($contenido, 'UTF-8') < 1 || // Mínimo 1 carácter
         !mb_check_encoding($contenido, 'UTF-8') ||
         mb_strlen($contenido, 'UTF-8') > 5000
     ) {
@@ -121,10 +129,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
             'type' => 'error',
             'message' => 'El comentario debe contener entre 1 y 5000 caracteres válidos.'
         ];
-        redirect('index.php');
-    }
-    if ($contenido === '') {
-        $_SESSION['flash'] = ['type' => 'error', 'message' => 'El comentario no puede estar vacío.'];
         redirect('index.php');
     }
 

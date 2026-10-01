@@ -6,8 +6,8 @@ require __DIR__ . '/config.php';
 
 function oauth_error(string $message): never
 {
-    // Cambia esto temporalmente para ver el error real en pantalla en lugar de que te redirija
-    error_log("OAuth Error: " . $message . " | state: " . $_GET['state'] ?? 'none' . " | savedState: " . ($_SESSION['google_oauth_state'] ?? 'empty'));
+    // No registrar valores sensibles, solo indicadores de error
+    error_log("OAuth Error: {$message}");
     
     $returnTo = ($_SESSION['google_oauth_return_to'] ?? 'login.php') === 'register.php'
         ? 'register.php'

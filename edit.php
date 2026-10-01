@@ -21,12 +21,20 @@ if (!$comment) {
 }
 
 if ((int)$comment['usuario_id'] !== (int)$_SESSION['user_id']) {
+    log_security_event('unauthorized_edit_attempt', "Comment ID: {$id}, User: {$_SESSION['user_id']}");
     $_SESSION['flash'] = ['type' => 'error', 'message' => 'No tienes permisos para editar este comentario.'];
     redirect('index.php');
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!validate_request_origin()) {
+        log_security_event('invalid_edit_origin', "IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Origen no permitido.'];
+        redirect('index.php');
+    }
+
     if (!csrf_valid($_POST['csrf_token'] ?? null)) {
+        log_security_event('csrf_attempt', "Edit attempt");
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Token CSRF inválido.'];
         redirect('index.php');
     }
