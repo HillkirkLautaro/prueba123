@@ -109,7 +109,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
         redirect('index.php');
     }
 
-    
+    // 1. Honeypot: si el campo oculto está lleno, es un bot
+    if (!empty($_POST['website_url'] ?? '')) {
+        log_security_event('honeypot_triggered', "User: {$_SESSION['user_id']}");
+        redirect('index.php'); // Descartar silenciosamente
+    }
+
+    // 2. Rate limiting: máximo 5 comentarios por minuto por usuario
+    $rateKey = 'comment_' . (int)$_SESSION['user_id'];
+    if (!check_rate_limit($rateKey, 5, 60)) {
+        log_security_event('comment_rate_limit', "User: {$_SESSION['user_id']}");
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Demasiados comentarios. Espera un momento antes de publicar de nuevo.'];
+        redirect('index.php');
+    }
+
+    // 3. hCaptcha invisible: verificar captcha
+    if (!verify_hcaptcha((string)($_POST['h-captcha-response'] ?? ''), $_SERVER['REMOTE_ADDR'] ?? null)) {
+        log_security_event('bot_captcha_failed', "User: {$_SESSION['user_id']}");
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Verificación anti-bot fallida. Inténtalo de nuevo.'];
+        redirect('index.php');
+    }
+
     $rawContent = $_POST['contenido'] ?? null;
 
     if (!is_string($rawContent)) {
@@ -205,6 +225,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     <title>Comentarios</title>
     <link rel="stylesheet" href="styles.css?v=3">
     <script src="timezone.js?v=2" defer></script>
+    <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
 </head>
 <body>
     <div class="container">
@@ -263,6 +284,13 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                 <form method="post" action="index.php" id="create-comment-form">
                     <input type="hidden" name="action" value="create_comment">
                     <input type="hidden" name="csrf_token" value="<?= e(csrf_token()); ?>">
+
+                    <!-- Honeypot: campo invisible para detectar bots -->
+                    <input type="text" name="website_url" style="display:none;position:absolute;left:-9999px;" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+                    <!-- hCaptcha invisible -->
+                    <div class="h-captcha" data-sitekey="<?= e($hcaptchaSitekey); ?>" data-size="invisible"></div>
+
                     <textarea name="contenido" placeholder="Escribe tu comentario..." required></textarea>
                     <p><button type="submit">Publicar comentario</button></p>
                 </form>
