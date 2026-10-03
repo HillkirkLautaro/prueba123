@@ -14,7 +14,7 @@ declare(strict_types=1);
 require __DIR__ . '/config.php';
 
 // Configuración de alertas
-const ALERT_EMAIL = 'security@dominio.com';
+const ALERT_EMAIL = 'hillkirklautaro18@gmail.com';
 const ALERT_THRESHOLD_LOGINS = 10;        // Intentos de login fallidos por IP
 const ALERT_THRESHOLD_CSRF = 5;            // Intentos de CSRF por IP
 const ALERT_THRESHOLD_UNAUTHORIZED = 3;    // Intentos de acceso no autorizado
