@@ -445,3 +445,114 @@ button,
     flex-shrink: 0;            /* Impide que el flexbox encoja la imagen */
     border: 1px solid #ddd;    /* Borde suave opcional */
 }
+
+/* Footer del sitio */
+.site-footer {
+    margin-top: 40px;
+    padding: 20px;
+    text-align: center;
+    color: #6b7280;
+    font-size: 0.9rem;
+    border-top: 1px solid #e5e7eb;
+}
+
+.site-footer a {
+    color: #2563eb;
+    text-decoration: none;
+}
+
+.site-footer a:hover {
+    text-decoration: underline;
+}
+
+/* Checkbox de términos */
+.checkbox-group {
+    margin: 16px 0;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-weight: normal;
+    cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+    margin-top: 3px;
+    width: auto;
+}
+
+.checkbox-label a {
+    color: #2563eb;
+    text-decoration: none;
+}
+
+.checkbox-label a:hover {
+    text-decoration: underline;
+}
+
+/* Páginas legales */
+.legal-content {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 30px;
+    margin-bottom: 20px;
+}
+
+.legal-content h2 {
+    color: #1f2937;
+    margin-top: 24px;
+    margin-bottom: 12px;
+}
+
+.legal-content h2:first-child {
+    margin-top: 0;
+}
+
+.legal-content p {
+    line-height: 1.7;
+    margin-bottom: 12px;
+}
+
+.legal-content ul {
+    margin: 12px 0;
+    padding-left: 24px;
+}
+
+.legal-content li {
+    margin-bottom: 6px;
+    line-height: 1.6;
+}
+
+.page-header {
+    margin-bottom: 24px;
+}
+
+.page-header h1 {
+    margin-bottom: 8px;
+}
+
+.last-update {
+    color: #6b7280;
+    font-size: 0.9rem;
+}
+
+.page-footer {
+    margin-top: 30px;
+    padding: 20px;
+    text-align: center;
+    color: #6b7280;
+    font-size: 0.9rem;
+    border-top: 1px solid #e5e7eb;
+}
+
+.page-footer a {
+    color: #2563eb;
+    text-decoration: none;
+}
+
+.page-footer a:hover {
+    text-decoration: underline;
+}

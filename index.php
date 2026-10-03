@@ -533,5 +533,12 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         });
 
     </script>
+    <footer class="site-footer">
+        <p>&copy; <?= date('Y') ?> <?= e(APP_NAME) ?>. Todos los derechos reservados.</p>
+        <p>
+            <a href="terminos.php">Términos y Condiciones</a> |
+            <a href="privacidad.php">Política de Privacidad</a>
+        </p>
+    </footer>
 </body>
 </html>

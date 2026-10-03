@@ -29,6 +29,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Completa la verificación anti-bot.'];
         redirect('register.php');
     }
+
+    if (!isset($_POST['accept_terms']) || $_POST['accept_terms'] !== '1') {
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Debes aceptar los Términos y Condiciones.'];
+        redirect('register.php');
+    }
     $usernameRaw = $_POST['username'] ?? null;
     $passwordRaw = $_POST['password'] ?? null;
     $emailRaw = $_POST['email'] ?? null;
@@ -131,6 +136,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="form-group">
                 <label for="password">Contraseña</label>
                 <input id="password" type="password" name="password" minlength="8" required>
+            </div>
+            <div class="form-group checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="accept_terms" value="1" required>
+                    <span>Acepto los <a href="terminos.php" target="_blank">Términos y Condiciones</a> y la <a href="privacidad.php" target="_blank">Política de Privacidad</a></span>
+                </label>
             </div>
             <div class="h-captcha" data-sitekey="<?= e($hcaptchaSitekey); ?>"></div>
             <button type="submit">Registrarse</button>
