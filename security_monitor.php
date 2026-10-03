@@ -6,7 +6,7 @@
  * para monitorear la seguridad de la aplicación en tiempo real.
  * 
  * Uso: php security_monitor.php
- * Cron: */5 * * * * /usr/bin/php /ruta/al/script/security_monitor.php
+ * Cron: cada 5 minutos -> /usr/bin/php /ruta/al/script/security_monitor.php
  */
 
 declare(strict_types=1);

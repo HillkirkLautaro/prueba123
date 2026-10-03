@@ -21,12 +21,12 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Variables
-PROJECT_DIR="/var/www/html/mi_aplicacion"
-DB_NAME="mi_base_de_datos"
-DB_USER="usuario_seguro"
-DB_PASSWORD="cambiar_por_contraseña_fuerte"
-BACKUP_DIR="/var/backups/mi_aplicacion"
-DOMAIN="tudominio.com"
+PROJECT_DIR="/home/lau/Escritorio/repos/prueba123-main"
+DB_NAME="if0_42867030_base_prueba"
+DB_USER="if0_42867030"
+DB_PASSWORD="9DcaQPZVTx"
+BACKUP_DIR="/home/lau/Escritorio/repos/prueba123-main/backups"
+DOMAIN="prueba123.gt.tc"
 
 echo -e "${BLUE}============================================${NC}"
 echo -e "${BLUE}  CONFIGURACIÓN DE SEGURIDAD - INICIO${NC}"
@@ -102,14 +102,15 @@ chmod 700 "$BACKUP_DIR"
 cat > "$BACKUP_DIR/backup_db.sh" << 'EOF'
 #!/bin/bash
 # Backup de base de datos
-BACKUP_DIR="/var/backups/mi_aplicacion"
-DB_NAME="mi_base_de_datos"
-DB_USER="usuario_seguro"
-DB_PASSWORD="cambiar_por_contraseña_fuerte"
+BACKUP_DIR="/home/lau/Escritorio/repos/prueba123-main/backups"
+DB_NAME="if0_42867030_base_prueba"
+DB_USER="if0_42867030"
+DB_PASSWORD="9DcaQPZVTx"
+DB_HOST="sql109.infinityfree.com"
 DATE=$(date +%Y%m%d_%H%M%S)
 
 # Crear backup
-mysqldump -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" > "$BACKUP_DIR/db_${DATE}.sql"
+mysqldump -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" > "$BACKUP_DIR/db_${DATE}.sql"
 
 # Comprimir backup
 gzip "$BACKUP_DIR/db_${DATE}.sql"

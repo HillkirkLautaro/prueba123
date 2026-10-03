@@ -123,9 +123,7 @@ require_once __DIR__ . '/config.php';
                 <h2>11. Contacto</h2>
                 <p>Si tiene preguntas o inquietudes sobre esta Política de Privacidad o sobre el tratamiento de sus datos personales, puede contactarnos a través de:</p>
                 <ul>
-                    <li>Email: <a href="mailto:privacidad@dominio.com">privacidad@dominio.com</a></li>
-                    <li>Sitio web: <a href="index.php"><?= e(APP_NAME) ?></a></li>
-                </ul>
+                    <li>Correo electrónico: <a href="mailto:superdogor@proton.me">
             </section>
         </main>
 
