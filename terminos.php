@@ -6,7 +6,7 @@ require_once __DIR__ . '/config.php';
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Términos y Condiciones - <?= e(APP_NAME) ?></title>
+    <title>Términos y Condiciones</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
