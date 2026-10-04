@@ -1,30 +1,27 @@
-<?php
-require_once __DIR__ . '/config.php';
-?>
 <!doctype html>
 <html lang="es">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Términos y Condiciones</title>
+    <title>Términos y Condiciones - prueba123</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
         <header class="page-header">
             <h1>Términos y Condiciones</h1>
-            <p class="last-update">Última actualización: <?= date('d/m/Y') ?></p>
+            <p class="last-update">Última actualización: 03/10/2026</p>
         </header>
 
         <main class="legal-content">
             <section>
                 <h2>1. Aceptación de los Términos</h2>
-                <p>Al acceder y utilizar <strong><?= e(APP_NAME) ?></strong> (en adelante, "el Sitio"), usted acepta estar sujeto a estos Términos y Condiciones. Si no está de acuerdo con alguna parte de estos términos, le rogamos que no utilice nuestro Sitio.</p>
+                <p>Al acceder y utilizar <strong>prueba123</strong> (en adelante, "el Sitio"), usted acepta estar sujeto a estos Términos y Condiciones. Si no está de acuerdo con alguna parte de estos términos, le rogamos que no utilice nuestro Sitio.</p>
             </section>
 
             <section>
                 <h2>2. Descripción del Servicio</h2>
-                <p><?= e(APP_NAME) ?> es una plataforma de discusión y comentarios que permite a los usuarios registrados publicar comentarios, responder a otros comentarios y participar en conversaciones sobre diversos temas.</p>
+                <p>prueba123 es una plataforma de discusión y comentarios que permite a los usuarios registrados publicar comentarios, responder a otros comentarios y participar en conversaciones sobre diversos temas.</p>
             </section>
 
             <section>
@@ -55,7 +52,7 @@ require_once __DIR__ . '/config.php';
 
             <section>
                 <h2>5. Contenido del Usuario</h2>
-                <p>El usuario conserva la propiedad del contenido que publica en el Sitio. Sin embargo, al publicar contenido, otorga a <?= e(APP_NAME) ?> una licencia no exclusiva, mundial y libre de regalías para mostrar, reproducir y distribuir dicho contenido en el marco del funcionamiento del Sitio.</p>
+                <p>El usuario conserva la propiedad del contenido que publica en el Sitio. Sin embargo, al publicar contenido, otorga a prueba123 una licencia no exclusiva, mundial y libre de regalías para mostrar, reproducir y distribuir dicho contenido en el marco del funcionamiento del Sitio.</p>
                 <p>El usuario es el único responsable del contenido que publica y garantiza que posee los derechos necesarios para compartir dicho contenido.</p>
             </section>
 
@@ -67,12 +64,12 @@ require_once __DIR__ . '/config.php';
 
             <section>
                 <h2>7. Propiedad Intelectual</h2>
-                <p>Todo el contenido del Sitio, incluyendo pero no limitado a textos, gráficos, logotipos, imágenes, software y diseño, es propiedad de <?= e(APP_NAME) ?> o de sus licenciantes y está protegido por las leyes de propiedad intelectual aplicables.</p>
+                <p>Todo el contenido del Sitio, incluyendo pero no limitado a textos, gráficos, logotipos, imágenes, software y diseño, es propiedad de prueba123 o de sus licenciantes y está protegido por las leyes de propiedad intelectual aplicables.</p>
             </section>
 
             <section>
                 <h2>8. Limitación de Responsabilidad</h2>
-                <p>El Sitio se proporciona "tal cual" y "según disponibilidad". No garantizamos que el servicio sea ininterrumpido, seguro o libre de errores. En la máxima medida permitida por la ley, <?= e(APP_NAME) ?> no será responsable de daños directos, indirectos, incidentales o consecuentes derivados del uso o la imposibilidad de uso del Sitio.</p>
+                <p>El Sitio se proporciona "tal cual" y "según disponibilidad". No garantizamos que el servicio sea ininterrumpido, seguro o libre de errores. En la máxima medida permitida por la ley, prueba123 no será responsable de daños directos, indirectos, incidentales o consecuentes derivados del uso o la imposibilidad de uso del Sitio.</p>
             </section>
 
             <section>
@@ -97,7 +94,7 @@ require_once __DIR__ . '/config.php';
         </main>
 
         <footer class="page-footer">
-            <p>&copy; <?= date('Y') ?> <?= e(APP_NAME) ?>. Todos los derechos reservados.</p>
+            <p>&copy; 2026 prueba123. Todos los derechos reservados.</p>
             <p><a href="index.php">Volver al inicio</a> | <a href="privacidad.php">Política de Privacidad</a></p>
         </footer>
     </div>

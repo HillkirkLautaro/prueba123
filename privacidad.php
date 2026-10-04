@@ -1,25 +1,22 @@
-<?php
-require_once __DIR__ . '/config.php';
-?>
 <!doctype html>
 <html lang="es">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Política de Privacidad - <?= e(APP_NAME) ?></title>
+    <title>Política de Privacidad - prueba123</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
         <header class="page-header">
             <h1>Política de Privacidad</h1>
-            <p class="last-update">Última actualización: <?= date('d/m/Y') ?></p>
+            <p class="last-update">Última actualización: 03/10/2026</p>
         </header>
 
         <main class="legal-content">
             <section>
                 <h2>1. Información que Recopilamos</h2>
-                <p>En <?= e(APP_NAME) ?> recopilamos información que usted nos proporciona directamente al registrarse y utilizar nuestro servicio:</p>
+                <p>En prueba123 recopilamos información que usted nos proporciona directamente al registrarse y utilizar nuestro servicio:</p>
                 <ul>
                     <li><strong>Nombre de usuario</strong>: Identificador público que le representa en la plataforma</li>
                     <li><strong>Dirección de correo electrónico</strong>: Se guarda de forma segura y se utiliza para:
@@ -60,7 +57,7 @@ require_once __DIR__ . '/config.php';
                 <p>No vendemos, alquilamos ni compartimos su información personal con terceros para fines comerciales. Podemos compartir información solo en los siguientes casos:</p>
                 <ul>
                     <li><strong>Requerimientos legales</strong>: Cuando sea necesario para cumplir con una obligación legal o responder a un proceso judicial</li>
-                    <li><strong>Protección de derechos</strong>: Para proteger y defender los derechos o propiedad de <?= e(APP_NAME) ?></li>
+                    <li><strong>Protección de derechos</strong>: Para proteger y defender los derechos o propiedad de prueba123</li>
                     <li><strong>Seguridad</strong>: Cuando sea necesario para investigar o prevenir actividades ilegales o fraudes</li>
                 </ul>
             </section>
@@ -123,12 +120,13 @@ require_once __DIR__ . '/config.php';
                 <h2>11. Contacto</h2>
                 <p>Si tiene preguntas o inquietudes sobre esta Política de Privacidad o sobre el tratamiento de sus datos personales, puede contactarnos a través de:</p>
                 <ul>
-                    <li>Correo electrónico: <a href="mailto:superdogor@proton.me">
+                    <li>Correo electrónico: <a href="mailto:superdogor@proton.me">superdogor@proton.me</a></li>
+                </ul>
             </section>
         </main>
 
         <footer class="page-footer">
-            <p>&copy; <?= date('Y') ?> <?= e(APP_NAME) ?>. Todos los derechos reservados.</p>
+            <p>&copy; 2026 prueba123. Todos los derechos reservados.</p>
             <p><a href="index.php">Volver al inicio</a> | <a href="terminos.php">Términos y Condiciones</a></p>
         </footer>
     </div>
