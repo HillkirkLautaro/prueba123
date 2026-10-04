@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/config-lite.php';
+require_once __DIR__ . '/config.php';
 ?>
 <!doctype html>
 <html lang="es">
