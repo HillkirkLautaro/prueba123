@@ -86,8 +86,8 @@
                     <li><strong>Portabilidad</strong>: Recibir sus datos en un formato estructurado y legible</li>
                     <li><strong>Oponerse</strong>: Oponerse al procesamiento de sus datos en ciertas circunstancias</li>
                 </ul>
-                <p>Para ejercer estos derechos, puede contactarnos a través de <a href="mailto:privacidad@dominio.com">privacidad@dominio.com</a>.</p>
-            </section>
+                        <p>Para ejercer estos derechos, puede contactarnos a través de <a href="mailto:superdogor@proton.me">privacidad@dominio.com</a>.</p>
+                    </section>
 
             <section>
                 <h2>7. Cookies y Tecnologías Similares</h2>

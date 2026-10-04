@@ -89,7 +89,7 @@
 
             <section>
                 <h2>12. Contacto</h2>
-                <p>Si tiene preguntas sobre estos Términos y Condiciones, puede contactarnos a través de <a href="mailto:legal@dominio.com">legal@dominio.com</a>.</p>
+                <p>Si tiene preguntas sobre estos Términos y Condiciones, puede contactarnos a través de <a href="mailto:superdogor@proton.me">legal@dominio.com</a>.</p>
             </section>
         </main>
 
