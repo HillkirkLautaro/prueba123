@@ -601,10 +601,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
             });
         }
 
-        // --- Clima en una esquina (Open-Meteo, backend) ---
+        // --- Clima en una esquina (Open-Meteo + geolocalización por IP, backend) ---
         async function fetchWeather() {
             try {
-                const resp = await fetch('/api/weather.php?lat=-34.6037&lon=-58.3816', {
+                const resp = await fetch('/api/weather.php', {
                     headers: { 'Accept': 'application/json' },
                     credentials: 'same-origin',
                     cache: 'no-store',
@@ -616,7 +616,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                 const icon = w.weathercode <= 1 ? '☀️' : w.weathercode <= 3 ? '⛅' : '☁️';
                 document.getElementById('weatherIcon').textContent = icon;
                 document.getElementById('weatherTemp').textContent = Math.round(w.temperature) + '°';
-                document.getElementById('weatherCity').textContent = 'Buenos Aires';
+                document.getElementById('weatherCity').textContent = data.location?.city || 'Desconocida';
                 document.getElementById('weatherWidget').hidden = false;
             } catch (_) {
                 // Si falla, el widget permanece oculto (degradación elegante)
