@@ -146,9 +146,9 @@ En `production`, la configuración rechaza credenciales de ejemplo, una base loc
 | [Open-Meteo](https://open-meteo.com/) | Backend PHP | Latitud y longitud aproximadas | El resto de la aplicación sigue disponible. El navegador reintenta con espera exponencial, hasta 60 segundos entre intentos. |
 | [hCaptcha](https://www.hcaptcha.com/) | Navegador y backend, si se configura | Token del desafío y dirección IP para validación | Si no se configuran las claves, el desafío no se muestra. Si está activo y falla, se rechaza el formulario con un mensaje. |
 | [Google OAuth](https://developers.google.com/identity/protocols/oauth2) | Backend y redirección del navegador, si se configura | Datos básicos de identidad autorizados por la persona usuaria | El acceso tradicional con usuario y contraseña permanece disponible. |
-| [Resend](https://resend.com/) | Backend PHP, durante el registro | Dirección de correo, nombre de usuario y enlace de verificación | No se crea una cuenta sin que pueda enviarse su enlace de activación. |
+| [Resend](https://resend.com/) | Backend PHP, durante el registro | Dirección de correo, nombre de usuario y enlace de verificación | La cuenta queda habilitada y el error se registra en el servidor. |
 
-Cuando se configuran `RESEND_API_KEY` y `RESEND_FROM`, el registro genera un token aleatorio de un solo uso, guarda únicamente su hash SHA-256 con vencimiento de 24 horas y envía el enlace `/verify_email.php` mediante Resend. La cuenta no puede iniciar sesión hasta que se confirme ese enlace. `RESEND_FROM` debe ser un remitente o dominio verificado en Resend. Si se usa el remitente de prueba `onboarding@resend.dev`, Resend sólo permite enviar al correo del titular de la cuenta.
+Cuando se configuran `RESEND_API_KEY` y `RESEND_FROM`, el registro genera un token aleatorio de un solo uso, guarda únicamente su hash SHA-256 con vencimiento de 24 horas y envía el enlace `/verify_email.php` mediante Resend. La cuenta no puede iniciar sesión hasta que se confirme ese enlace. Si Resend no está configurado o el envío falla, la verificación se omite, la cuenta se habilita y el resto de la aplicación continúa normalmente. `RESEND_FROM` debe ser un remitente o dominio verificado en Resend. Si se usa el remitente de prueba `onboarding@resend.dev`, Resend sólo permite enviar al correo del titular de la cuenta.
 
 La ubicación no utiliza la API de geolocalización del navegador; se infiere de manera aproximada desde la IP. Las preferencias de modo oscuro y visibilidad de respuestas se guardan únicamente en `localStorage` del navegador.
 
@@ -185,7 +185,7 @@ Para un servidor propio con Apache o Nginx, certificados y tareas de mantenimien
 - Las notificaciones usan sondeo periódico mientras la pestaña está visible; no hay conexión WebSocket.
 - La ubicación por IP es estimada y puede usar Buenos Aires como valor de respaldo.
 - La disponibilidad de Google OAuth y hCaptcha depende de sus credenciales externas.
-- La verificación depende de la disponibilidad de Resend. Si el correo no se puede enviar, el registro se cancela para no dejar una cuenta inaccesible.
+- La verificación por correo sólo se aplica mientras Resend esté configurado y disponible. Sin ese servicio, las cuentas nuevas se habilitan para preservar el funcionamiento normal.
 - La estrategia de caché de `sw.js` está disponible en el proyecto; su registro desde el cliente debe verificarse o integrarse antes de depender de ella para uso sin conexión.
 - Los hostings compartidos pueden limitar procesos persistentes, cron o peticiones procedentes de clientes no convencionales.
 

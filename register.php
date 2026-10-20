@@ -110,18 +110,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         : (($isHttps ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? 'localhost')
             . rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/'));
     $verificationUrl = $baseUrl . '/verify_email.php?token=' . rawurlencode($verificationToken);
-    $verificationEmail = resend_send_verification_email($email, $username, $verificationUrl);
-    if (($verificationEmail['success'] ?? false) !== true) {
-        // No se conserva una cuenta que no puede recibir su enlace de activación.
-        $delete = $pdo->prepare('DELETE FROM usuarios WHERE username = :username AND email_verified_at IS NULL');
-        $delete->execute([':username' => $username]);
-        error_log('Verification email unavailable: ' . ($verificationEmail['error'] ?? 'error desconocido'));
-        $_SESSION['flash'] = ['type' => 'error', 'message' => 'No se pudo enviar el correo de verificación. Inténtalo nuevamente más tarde.'];
-        redirect('register.php');
+    $verificationSent = false;
+    if (resend_is_configured()) {
+        $verificationEmail = resend_send_verification_email($email, $username, $verificationUrl);
+        $verificationSent = ($verificationEmail['success'] ?? false) === true;
+        if (!$verificationSent) {
+            error_log('Verification email unavailable: ' . ($verificationEmail['error'] ?? 'error desconocido'));
+        }
+    }
+
+    if (!$verificationSent) {
+        // Resend es opcional: no bloquear el uso normal si no está configurado
+        // o si su servicio presenta una falla temporal.
+        $activate = $pdo->prepare(
+            'UPDATE usuarios
+             SET email_verified_at = UTC_TIMESTAMP(),
+                 email_verification_token = NULL,
+                 email_verification_expires_at = NULL
+             WHERE username = :username AND email_verified_at IS NULL'
+        );
+        $activate->execute([':username' => $username]);
     }
 
     session_regenerate_id(true);
-    $_SESSION['flash'] = ['type' => 'success', 'message' => 'Registro exitoso. Revisa tu correo para verificar la cuenta antes de iniciar sesión.'];
+    $_SESSION['flash'] = [
+        'type' => 'success',
+        'message' => $verificationSent
+            ? 'Registro exitoso. Revisa tu correo para verificar la cuenta antes de iniciar sesión.'
+            : 'Registro exitoso. La verificación por correo no está disponible; tu cuenta fue habilitada.',
+    ];
     redirect('login.php');
 }
 ?>

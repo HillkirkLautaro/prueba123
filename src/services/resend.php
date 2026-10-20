@@ -27,6 +27,11 @@ function resend_setting(string $name, string $default = ''): string
     return $value === false || trim((string)$value) === '' ? $default : trim((string)$value);
 }
 
+function resend_is_configured(): bool
+{
+    return resend_setting('RESEND_API_KEY') !== '';
+}
+
 function resend_send_email(string $to, string $subject, string $html, ?string $from = null): array
 {
     if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
