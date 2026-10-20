@@ -243,6 +243,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         <div class="panel">
             <div class="topbar">
             <h1>Comentarios</h1>
+            <div class="weather-widget" id="weatherWidget" hidden>
+                <span class="weather-icon" id="weatherIcon">☁️</span>
+                <span class="weather-temp" id="weatherTemp">--°</span>
+                <span class="weather-city" id="weatherCity">--</span>
+            </div>
             <?php if (is_logged_in()): ?>
                 <div>
                     <span class="muted">Hola, <?= e($_SESSION['username']); ?></span>
@@ -595,6 +600,30 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                 }
             });
         }
+
+        // --- Clima en una esquina (Open-Meteo, backend) ---
+        async function fetchWeather() {
+            try {
+                const resp = await fetch('/api/weather.php?lat=-34.6037&lon=-58.3816', {
+                    headers: { 'Accept': 'application/json' },
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                });
+                if (!resp.ok) return;
+                const data = await resp.json();
+                if (!data.success || !data.data) return;
+                const w = data.data;
+                const icon = w.weathercode <= 1 ? '☀️' : w.weathercode <= 3 ? '⛅' : '☁️';
+                document.getElementById('weatherIcon').textContent = icon;
+                document.getElementById('weatherTemp').textContent = Math.round(w.temperature) + '°';
+                document.getElementById('weatherCity').textContent = 'Buenos Aires';
+                document.getElementById('weatherWidget').hidden = false;
+            } catch (_) {
+                // Si falla, el widget permanece oculto (degradación elegante)
+            }
+        }
+        fetchWeather();
+        setInterval(fetchWeather, 600000);
 
     </script>
     <footer class="site-footer">

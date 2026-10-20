@@ -60,11 +60,3 @@ CREATE INDEX idx_comentarios_usuario ON comentarios(usuario_id);
 CREATE INDEX idx_comentarios_parent ON comentarios(parent_id);
 CREATE INDEX idx_votos_comentario ON votos(comentario_id);
 CREATE INDEX idx_notificaciones_usuario ON notificaciones(usuario_id, leido);
-
--- ============================================================
--- Notas de despliegue en InfinityFree:
--- 1. Crea la base de datos desde el panel de InfinityFree.
--- 2. Copia las credenciales (host, usuario, contraseña, nombre de BD)
---    al archivo .env (no subir este archivo al repositorio).
--- 3. Ejecuta este script contra tu base de datos remota (phpMyAdmin o mysql CLI).
--- ============================================================
