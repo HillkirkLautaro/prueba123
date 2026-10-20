@@ -2,28 +2,33 @@
 
 declare(strict_types=1);
 
-require __DIR__ . '/config.php';
-require __DIR__ . '/csrf.php';
+/**
+ * Cierre de sesión robusto e independiente.
+ *
+ * No requiere config.php para evitar que un error de configuración de la base
+ * de datos (credenciales faltantes, HTTPS no configurado, etc.) devuelva 500
+ * e impida que el usuario cierre sesión. El logout es una operación segura e
+ * idempotente: solo destruye la sesión del usuario actual.
+ */
 
-// Si no hay sesión activa, ya está cerrado: redirigir sin error.
-if (!is_logged_in()) {
-    redirect('login.php');
+// Iniciar sesión si no está iniciada (necesario para poder destruirla).
+if (session_status() === PHP_SESSION_NONE) {
+    $isHttps = (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off')
+        || ($_SERVER['SERVER_PORT'] ?? 0) == 443
+        || strtolower($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https'
+        || strtolower($_SERVER['HTTP_X_FORWARDED_SSL'] ?? '') === 'on';
+
+    session_start([
+        'cookie_httponly' => true,
+        'cookie_samesite' => 'Lax',
+        'cookie_secure' => $isHttps,
+    ]);
 }
 
-// Logout es una operación idempotente y segura (solo destruye la sesión del usuario).
-// Se acepta POST con CSRF válido, pero si falla (sesión expirada, fingerprint cambiado,
-// token desincronizado) se cierra la sesión de todas formas para no dejar al usuario
-// atrapado con un mensaje de error.
-$csrfOk = csrf_valid($_POST['csrf_token'] ?? null);
-$originOk = validate_request_origin();
-
-if (!$csrfOk || !$originOk) {
-    log_security_event('logout_invalid_request', "csrf=" . ($csrfOk ? 'ok' : 'fail') . ", origin=" . ($originOk ? 'ok' : 'fail'));
-}
-
-// Destruir sesión y cookie sin importar si el CSRF/origen fallaron (operación segura/idempotente).
+// Vaciar todos los datos de sesión.
 $_SESSION = [];
 
+// Eliminar la cookie de sesión del navegador.
 if (ini_get('session.use_cookies')) {
     $params = session_get_cookie_params();
     setcookie(session_name(), '', [
@@ -36,5 +41,10 @@ if (ini_get('session.use_cookies')) {
     ]);
 }
 
+// Destruir la sesión en el servidor.
 session_destroy();
-redirect('login.php');
+session_write_close();
+
+// Redirigir al login.
+header('Location: login.php');
+exit;
