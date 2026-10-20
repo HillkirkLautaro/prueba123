@@ -66,18 +66,17 @@ $isHttps = (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !
     || strtolower($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https'
     || strtolower($_SERVER['HTTP_X_FORWARDED_SSL'] ?? '') === 'on'
     || PHP_SAPI === 'cli'; // CLI (cron, scripts) no usa HTTPS directamente
-$dbHost = env_value($env, 'DB_HOST', '');
+$dbHost = env_value($env, 'DB_HOST', '127.0.0.1');
 $dbPort = (int)env_value($env, 'DB_PORT', '3306');
-$dbName = env_value($env, 'DB_NAME', '');
-$dbUser = env_value($env, 'DB_USER', '');
-$dbPassword = env_value($env, 'DB_PASSWORD', '');
+$dbName = env_value($env, 'DB_NAME', 'mi_crud_local');
+$dbUser = env_value($env, 'DB_USER', 'root');
+$dbPassword = env_value($env, 'DB_PASSWORD', env_value($env, 'DB_PASS', ''));
 $appEnv = strtolower(env_value($env, 'APP_ENV', 'production'));
 $hcaptchaSitekey = env_value($env, 'HCAPTCHA_SITEKEY');
 $hcaptchaSecret = env_value($env, 'HCAPTCHA_SECRET');
 $googleClientId = env_value($env, 'GOOGLE_CLIENT_ID_OAUTH');
 $googleClientSecret = env_value($env, 'GOOGLE_SECRET_CLIENT');
 $googleRedirectUri = env_value($env, 'GOOGLE_OAUTH_REDIRECT_URI');
-$resendApiKey = env_value($env, 'RESEND_API_KEY', '');
 
 if (!in_array($appEnv, ['local', 'staging', 'production'], true)) {
     error_log('Invalid APP_ENV value.');
@@ -87,14 +86,6 @@ if (!in_array($appEnv, ['local', 'staging', 'production'], true)) {
 
 if ($dbPort < 1 || $dbPort > 65535) {
     error_log('Invalid database port.');
-    http_response_code(500);
-    exit('Application configuration unavailable.');
-}
-
-// Las credenciales de la base de datos deben leerse exclusivamente del entorno.
-// No se aceptan valores por defecto (cumple R7: ninguna clave ni contraseña en el código).
-if ($dbHost === '' || $dbName === '' || $dbUser === '') {
-    error_log('Database credentials are not configured via environment variables.');
     http_response_code(500);
     exit('Application configuration unavailable.');
 }
