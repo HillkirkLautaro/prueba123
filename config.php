@@ -77,6 +77,7 @@ $hcaptchaSecret = env_value($env, 'HCAPTCHA_SECRET');
 $googleClientId = env_value($env, 'GOOGLE_CLIENT_ID_OAUTH');
 $googleClientSecret = env_value($env, 'GOOGLE_SECRET_CLIENT');
 $googleRedirectUri = env_value($env, 'GOOGLE_OAUTH_REDIRECT_URI');
+$appUrl = rtrim(env_value($env, 'APP_URL'), '/');
 
 if (!in_array($appEnv, ['local', 'staging', 'production'], true)) {
     error_log('Invalid APP_ENV value.');
@@ -101,6 +102,12 @@ if ($appEnv === 'production') {
 
     if ($invalidProductionDatabase || !$isHttps) {
         error_log('Production database credentials or HTTPS are not configured.');
+        http_response_code(500);
+        exit('Application configuration unavailable.');
+    }
+
+    if ($appUrl === '' || !filter_var($appUrl, FILTER_VALIDATE_URL) || strpos(strtolower($appUrl), 'https://') !== 0) {
+        error_log('Production APP_URL must use HTTPS.');
         http_response_code(500);
         exit('Application configuration unavailable.');
     }

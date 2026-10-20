@@ -56,13 +56,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Credenciales inválidas.'];
         redirect('login.php');
     }
-    $stmt = $pdo->prepare('SELECT id, username, email, password FROM usuarios WHERE username = :username LIMIT 1');
+    $stmt = $pdo->prepare('SELECT id, username, email, password, email_verified_at FROM usuarios WHERE username = :username LIMIT 1');
     $stmt->execute([':username' => $username]);
     $user = $stmt->fetch();
 
     if (!$user || !password_verify($password, $user['password'])) {
         log_security_event('login_failed', "Username: {$username}");
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Credenciales incorrectas.'];
+        redirect('login.php');
+    }
+
+    if ($user['email_verified_at'] === null) {
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Verifica tu correo electrónico antes de iniciar sesión.'];
         redirect('login.php');
     }
 

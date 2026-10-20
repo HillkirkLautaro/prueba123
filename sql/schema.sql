@@ -16,8 +16,13 @@ CREATE TABLE IF NOT EXISTS usuarios (
     email VARCHAR(254) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     avatar VARCHAR(500) NULL,
+    email_verified_at DATETIME NULL,
+    email_verification_token CHAR(64) NULL,
+    email_verification_expires_at DATETIME NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
+
+CREATE INDEX idx_usuarios_email_verification_token ON usuarios(email_verification_token);
 
 -- Tabla de comentarios (recurso principal con CRUD)
 CREATE TABLE IF NOT EXISTS comentarios (

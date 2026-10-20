@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/config.php';
 require __DIR__ . '/csrf.php';
+require __DIR__ . '/src/services/resend.php';
 
 if (is_logged_in()) {
     redirect('index.php');
@@ -81,15 +82,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('register.php');
     }
 
+    $verificationToken = bin2hex(random_bytes(32));
+    $verificationTokenHash = hash('sha256', $verificationToken);
+
     try {
         $stmt = $pdo->prepare(
-            'INSERT INTO usuarios (username, email, password, created_at)
-             VALUES (:username, :email, :password, UTC_TIMESTAMP())'
+            'INSERT INTO usuarios (username, email, password, email_verification_token, email_verification_expires_at, created_at)
+             VALUES (:username, :email, :password, :verification_token, DATE_ADD(UTC_TIMESTAMP(), INTERVAL 24 HOUR), UTC_TIMESTAMP())'
         );
         $stmt->execute([
             ':username' => $username,
             ':email' => $email,
             ':password' => password_hash($password, PASSWORD_BCRYPT),
+            ':verification_token' => $verificationTokenHash,
         ]);
     } catch (PDOException $exception) {
         if ($exception->getCode() === '23000') {
@@ -100,8 +105,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         throw $exception;
     }
 
+    $baseUrl = $appUrl !== ''
+        ? $appUrl
+        : (($isHttps ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? 'localhost')
+            . rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/'));
+    $verificationUrl = $baseUrl . '/verify_email.php?token=' . rawurlencode($verificationToken);
+    $verificationEmail = resend_send_verification_email($email, $username, $verificationUrl);
+    if (($verificationEmail['success'] ?? false) !== true) {
+        // No se conserva una cuenta que no puede recibir su enlace de activación.
+        $delete = $pdo->prepare('DELETE FROM usuarios WHERE username = :username AND email_verified_at IS NULL');
+        $delete->execute([':username' => $username]);
+        error_log('Verification email unavailable: ' . ($verificationEmail['error'] ?? 'error desconocido'));
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'No se pudo enviar el correo de verificación. Inténtalo nuevamente más tarde.'];
+        redirect('register.php');
+    }
+
     session_regenerate_id(true);
-    $_SESSION['flash'] = ['type' => 'success', 'message' => 'Registro exitoso. Inicia sesión.'];
+    $_SESSION['flash'] = ['type' => 'success', 'message' => 'Registro exitoso. Revisa tu correo para verificar la cuenta antes de iniciar sesión.'];
     redirect('login.php');
 }
 ?>

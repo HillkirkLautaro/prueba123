@@ -1,89 +1,72 @@
-# 📱 Comentarios — TP Integrador N.º 1
+# Comentarios
 
-**Materia:** Aplicaciones Móviles y Cloud Computing  
-**Tema de la app:** Sistema de comentarios fullstack (PHP + MySQL) con API REST, autenticación, votos, notificaciones y avatar de perfil.  
-**Proveedor cloud:** InfinityFree (hosting compartido gratuito + MySQL remoto).  
-**URL pública de la app (frontend):** `https://prueba123.gt.tc`  
-**URL de la API:** `https://prueba123.gt.tc/api/comentarios.php`  
-**Repositorio:** https://github.com/HillkirkLautaro/prueba123  
-**Integrante:** Lautaro Hillkirk — trabajo individual, creado solo por él.
+Aplicación web de conversación comunitaria desarrollada con PHP, MySQL y JavaScript. Permite crear una cuenta, publicar comentarios, responderlos en un nivel, votar, recibir notificaciones y administrar un perfil con avatar.
 
----
+- **Sitio público:** <https://prueba123.gt.tc>
+- **API de comentarios:** <https://prueba123.gt.tc/api/comentarios.php>
+- **Repositorio:** <https://github.com/HillkirkLautaro/prueba123>
+- **Autor:** Lautaro Hillkirk
 
-## 1. Presentación
+## Funcionalidades
 
-Esta aplicación permite a los usuarios registrarse, iniciar sesión, crear comentarios, responder a comentarios existentes, votar (me gusta / no me gusta), editar y eliminar sus propios comentarios, y gestionar su perfil con foto de avatar. Incluye un panel de notificaciones en tiempo real (sondeo cada 8 segundos sin recargar) y páginas legales (términos y privacidad).
+- Registro e inicio de sesión mediante usuario y contraseña; inicio con Google opcional.
+- Comentarios con alta, consulta, edición y eliminación para su autor.
+- Respuestas de un único nivel, reacciones de *Me gusta* y *No me gusta* y notificaciones asociadas.
+- Actualización dinámica de comentarios y notificaciones sin recargar la página.
+- Preferencias visuales persistentes: modo oscuro y visualización progresiva de respuestas de a tres.
+- Perfil público, actualización de avatar y recorte de imágenes compatible.
+- Widget de clima actual con ubicación aproximada por IP, estado visible y reintentos graduales ante fallas.
+- Fechas mostradas en la zona horaria del navegador.
 
-La app está desplegada en **InfinityFree**, accesible por **HTTPS** desde cualquier dispositivo (computadora o celular con datos móviles), con la base de datos también en la nube (MySQL remoto de InfinityFree).
+## Arquitectura y estructura
 
-**Modo Android:** la app se entrega como **PWA (Progressive Web App)**. Desde Chrome en Android, el usuario puede "Instalar app" y la abre como una aplicación nativa (icono en pantalla de inicio, barra de direcciones ocultada, `display: standalone`). Se eligió PWA en lugar de wrapper (WebView/Play Store) porque InfinityFree es hosting compartido: no permite instalar binarios nativos ni publicar en tiendas, y una PWA es accesible únicamente por URL HTTPS, funciona en cualquier dispositivo y cumple el requisito R6 sin complejidad adicional.
-
----
-
-## 0. Estructura de carpetas
-
-```
-prueba123/
-├── api/                 # Endpoints REST (accesibles por URL)
-│   ├── comentarios.php  # CRUD de comentarios (GET, POST, PUT, DELETE)
-│   └── weather.php      # Clima actual (Open-Meteo + geolocalización por IP)
-├── src/
-│   └── services/        # Servicios backend internos (no accedidos directamente)
-│       ├── ip_location.php   # Geolocalización por IP (ip-api.com)
-│       ├── resend.php        # Email transaccional (Resend)
-│       └── weather.php       # Clima (Open-Meteo)
-├── js/
-│   └── api-client.js    # Cliente fetch para la API REST (sin recargar página)
-├── sql/
-│   └── schema.sql       # Script SQL para crear la base de datos
-├── backups/
-│   ├── backup_db.sh     # Backup automático de MySQL
-│   └── backup_files.sh  # Backup automático de archivos
-├── (puntos de entrada PHP públicos en raíz)
-│   ├── index.php        # Página principal (comentarios + widget clima)
-│   ├── login.php        # Autenticación
-│   ├── register.php     # Registro de usuarios
-│   ├── profile.php      # Perfil y avatar
-│   ├── edit.php         # Editar comentario
-│   ├── delete.php       # Eliminar comentario
-│   ├── actions.php      # Responder y votar comentarios
-│   ├── notifications.php# Notificaciones (GET/POST)
-│   ├── logout.php       # Cierre de sesión
-│   ├── google_login.php # OAuth con Google
-│   ├── google_callback.php# Callback OAuth Google
-│   ├── terminos.php     # Términos y Condiciones
-│   ├── privacidad.php   # Política de Privacidad
-│   ├── config.php       # Configuración, DB, sesiones, cabeceras de seguridad
-│   ├── csrf.php         # Tokens CSRF
-│   └── security_monitor.php # Monitoreo de seguridad (CLI/cron)
-├── styles.css           # Hojas de estilo
-├── manifest.json        # Manifiesto PWA
-├── sw.js                # Service Worker PWA
-├── timezone.js          # Formateo de fechas en zona horaria local
-├── .env.example         # Plantilla de variables de entorno (no subir .env real)
-├── .gitignore           # Archivos ignorados por git
-├── .htaccess            # Restricción de acceso a archivos sensibles
-├── README.md            # Este archivo (entregable)
-├── DEPLOYMENT.md        # Guía de despliegue
-├── SECURITY.md          # Documentación de seguridad
-└── INCIDENT_RESPONSE.md # Procedimientos de respuesta a incidentes
+```text
+.
+├── api/
+│   ├── comentarios.php       API REST del recurso comentarios
+│   └── weather.php           API interna para ubicación y clima
+├── js/api-client.js          Cliente fetch de comentarios
+├── sql/schema.sql            Esquema inicial de MySQL
+├── src/services/
+│   ├── ip_location.php       Adaptadores de geolocalización por IP
+│   ├── weather.php           Adaptador de Open-Meteo
+│   └── resend.php            Adaptador opcional de correo
+├── uploads/avatars/          Avatares cargados en tiempo de ejecución
+├── index.php                 Muro de comentarios y preferencias
+├── actions.php               Respuestas y votos mediante formularios
+├── notifications.php         Consulta y marcado de notificaciones
+├── profile.php               Perfil y avatar
+├── login.php / register.php  Autenticación local
+├── google_*.php              Flujo OAuth 2.0 con PKCE de Google
+├── config.php                Entorno, PDO, sesión y cabeceras de seguridad
+├── csrf.php                  Protección CSRF y utilidades de origen
+├── styles.css                Estilos compartidos y tema oscuro
+├── manifest.json             Metadatos de instalación web
+└── sw.js                     Estrategia de caché estática disponible
 ```
 
-> ⚠️ Los archivos de punto de entrada PHP (`index.php`, `login.php`, etc.) deben permanecer en la raíz porque InfinityFree es hosting compartido y no permite cambiar el document root. Los servicios internos en `src/services/` no se acceden directamente por URL; son incluidos por los endpoints de `api/`.
+La interfaz y la API comparten origen. La capa PHP centraliza la sesión, las validaciones y el acceso a MySQL mediante PDO. Los servicios de terceros se encuentran aislados en `src/services/`.
 
----
+## Ejecución local
 
-## 2. Cómo correrla en local (XAMPP)
+### Requisitos
 
-1. Instala [XAMPP](https://www.apachefriends.org/) (Apache + PHP 8.0+ + MySQL).
-2. Clona o copia este proyecto en `htdocs/prueba123/`.
-3. Crea la base de datos ejecutando el script SQL:
+- XAMPP, Laragon o un servidor equivalente con Apache, PHP 8.0 o superior y MySQL/MariaDB.
+- Extensiones PHP recomendadas: `pdo_mysql`, `mbstring`, `curl`, `fileinfo` y `gd`.
+
+### Instalación
+
+1. Copiá el proyecto en el directorio público del servidor, por ejemplo `htdocs/comentarios`.
+2. Creá la base e importá el esquema:
+
    ```bash
-   # En phpMyAdmin o por consola MySQL
    mysql -u root -p < sql/schema.sql
    ```
-   O importa `sql/schema.sql` desde phpMyAdmin.
-4. Copia `.env.example` a `.env` y completa las credenciales de tu base de datos local:
+
+   También se puede importar `sql/schema.sql` desde phpMyAdmin. El script crea la base local `mi_crud_local`, las tablas `usuarios`, `comentarios`, `votos` y `notificaciones`, sus claves foráneas e índices.
+
+3. Creá `.env` a partir de `.env.example` y configurá, como mínimo, la conexión local:
+
    ```env
    DB_HOST=127.0.0.1
    DB_PORT=3306
@@ -92,106 +75,123 @@ prueba123/
    DB_PASSWORD=
    APP_ENV=local
    ```
-   ⚠️ El archivo `.env` **no se sube al repositorio** (está en `.gitignore`).
-5. Si usas hCaptcha y Google OAuth, completa `HCAPTCHA_SITEKEY`, `HCAPTCHA_SECRET`, `GOOGLE_CLIENT_ID_OAUTH`, `GOOGLE_SECRET_CLIENT` y `GOOGLE_OAUTH_REDIRECT_URI` en `.env`. Son integraciones opcionales: sin esas variables funcionan el registro/login con usuario y contraseña y el resto de la aplicación.
-6. Accede a `http://localhost/prueba123/index.php`.
 
-El script `sql/schema.sql` crea las tablas `usuarios`, `comentarios`, `votos` y `notificaciones` con sus relaciones y claves foráneas.
+4. Asegurá permisos de escritura del usuario web sobre `uploads/avatars/` si se van a cargar imágenes.
+5. Abrí `http://localhost/comentarios/index.php` (adaptando la carpeta a tu instalación).
 
----
+> `.env` contiene secretos y no debe versionarse ni publicarse. La aplicación lee primero las variables del proceso y después el archivo `.env` local.
 
-## 3. Endpoints de la API
+## API HTTP
 
-El recurso principal es **comentarios**, con CRUD completo respondiendo JSON (cumple R1 y R2).
+### Recurso REST: comentarios
 
-| Método | Ruta | Qué recibe | Qué devuelve | Códigos de estado |
-|--------|------|------------|--------------|-------------------|
-| GET | `/api/comentarios.php` | `?page=N` (opcional) | `{ success, data: [..], page, per_page }` | 200 |
-| GET | `/api/comentarios.php?id=X` | — | `{ success, data: { comentario } }` | 200, **404** si no existe |
-| POST | `/api/comentarios.php` | JSON `{ contenido, csrf_token }` | `{ success, message, data: { id } }` | **201** al crear, 401, **422** datos inválidos, 500 |
-| PUT | `/api/comentarios.php?id=X` | JSON `{ contenido, csrf_token }` | `{ success, message }` | 200, 401, 403, **404**, **422**, 500 |
-| DELETE | `/api/comentarios.php?id=X` | JSON `{ csrf_token }` | `{ success, message }` | 200, 401, 403, **404**, 500 |
+Ruta base: `/api/comentarios.php`. Las respuestas son JSON y las operaciones que cambian datos requieren una sesión autenticada y un `csrf_token` válido.
 
-**Notas:**
-- Las operaciones de escritura (POST/PUT/DELETE) requieren sesión iniciada y ser el autor del comentario (protección IDOR).
-- Todas las respuestas son `application/json`.
-- No se usa `Access-Control-Allow-Origin: *` (mismo origen; cumple R8).
-- Los códigos 400/422 se devuelven ante datos inválidos, 404 si el recurso no existe, 500 solo ante fallas del servidor.
+| Método | Ruta | Entrada | Resultado | Estados principales |
+|---|---|---|---|---|
+| `GET` | `/api/comentarios.php?page=1` | `page` opcional | Lista de comentarios raíz, página y tamaño de página | `200` |
+| `GET` | `/api/comentarios.php?id={id}` | Identificador en query string | Un comentario | `200`, `404` |
+| `POST` | `/api/comentarios.php` | JSON: `contenido`, `csrf_token` | Comentario creado e identificador | `201`, `401`, `403`, `422`, `500` |
+| `PUT` | `/api/comentarios.php?id={id}` | JSON: `contenido`, `csrf_token` | Confirmación de edición | `200`, `400`, `401`, `403`, `404`, `422`, `500` |
+| `DELETE` | `/api/comentarios.php?id={id}` | JSON: `csrf_token` | Confirmación de eliminación | `200`, `400`, `401`, `403`, `404`, `500` |
 
----
+Ejemplo de creación:
 
-## 4. Variables de entorno
+```json
+{
+  "contenido": "Mi primer comentario",
+  "csrf_token": "token-de-la-sesion"
+}
+```
 
-Todas las credenciales y claves se leen con `getenv()` desde `.env` (no hay valores reales en el código; cumple **R7**).
+Los errores siguen el formato `{"success": false, "error": "mensaje"}`. `js/api-client.js` verifica `response.ok` y propaga el mensaje para mostrarlo en la interfaz.
 
-| Variable | Para qué sirve |
-|----------|----------------|
-| `DB_HOST` | Host de la base de datos MySQL (ej. `sqlXXX.infinityfree.com`) |
-| `DB_PORT` | Puerto de MySQL (default `3306`) |
-| `DB_NAME` | Nombre de la base de datos |
-| `DB_USER` | Usuario de la base de datos |
-| `DB_PASSWORD` | Contraseña de la base de datos |
-| `APP_ENV` | Entorno: `local`, `staging` o `production` |
-| `HCAPTCHA_SITEKEY` | Clave pública de hCaptcha (anti-bot) |
-| `HCAPTCHA_SECRET` | Secreto de hCaptcha (verificación en backend) |
-| `GOOGLE_CLIENT_ID_OAUTH` | Client ID de Google OAuth (opcional) |
-| `GOOGLE_SECRET_CLIENT` | Secreto de Google OAuth (opcional) |
-| `GOOGLE_OAUTH_REDIRECT_URI` | URI de redirección de Google OAuth (HTTPS en producción) |
-| `RESEND_API_KEY` | **API key de Resend** (servicio de email transaccional, backend) |
-| `ALLOWED_ORIGINS` | Orígenes permitidos para validación de peticiones |
+### Rutas auxiliares
 
-⚠️ **Nunca subas el archivo `.env` ni valores reales al repositorio.** El archivo `.env.example` solo contiene placeholders.
+| Ruta | Uso | Método |
+|---|---|---|
+| `/api/weather.php` | Obtiene ubicación aproximada y clima actual; devuelve datos y estados de ambos servicios | `GET` |
+| `/notifications.php` | Devuelve las diez notificaciones más recientes y el total no leído; también permite marcarlas como leídas | `GET`, `POST` |
+| `/actions.php` | Publica una respuesta o crea/cambia/elimina un voto desde formularios | `POST` |
 
----
+Estas rutas validan sesión, origen y/o token CSRF según la acción. Las respuestas anidadas no forman parte del CRUD REST: se crean desde `actions.php` y sólo se permite un nivel.
 
-## 5. Servicios externos
+## Configuración
 
-| Servicio | Quién lo llama | Por qué | Datos personales que salen | Qué pasa si falla (degradación elegante, R5) |
-|----------|----------------|---------|----------------------------|----------------------------------------------|
-| **Resend** (email transaccional) | **Backend** (PHP) | Enviar correos (bienvenida, notificaciones) desde el servidor. Se requiere que al menos un servicio externo se llame desde el backend (R4). | Dirección de correo del destinatario y contenido del mensaje → `api.resend.com` | Si `RESEND_API_KEY` no está configurada o la petición falla, `resend_send_email()` devuelve `success => false` y la app **sigue funcionando** (solo se registra en los logs). |
-| **Open-Meteo** (clima) | **Backend** (PHP) | Mostrar el clima actual en el menú principal usando la ubicación aproximada de la IP. Servicio gratuito, sin API key. | IP para geolocalización → `ipwho.is`/`ip-api.com`; latitud y longitud → `api.open-meteo.com` | Si la geolocalización falla se usan coordenadas de fallback y, si el clima no responde, la aplicación continúa funcionando y reintenta desde el navegador. |
-| hCaptcha | Backend + Frontend | Verificación anti-bot opcional en login y registro. | Token de challenge → `api.hcaptcha.com` | Si no hay claves, el challenge se desactiva y la autenticación básica sigue funcionando; si está configurado y falla, se informa el error. |
-| Google OAuth | Backend | Login con cuenta de Google (opcional). | Perfil de Google → `oauth2.googleapis.com` | Si falla, el usuario puede usar login con email/contraseña. |
+| Variable | Descripción | Obligatoria |
+|---|---|---|
+| `DB_HOST` | Servidor MySQL | Sí |
+| `DB_PORT` | Puerto MySQL; normalmente `3306` | Sí |
+| `DB_NAME` | Nombre de la base de datos | Sí |
+| `DB_USER` | Usuario de la base de datos | Sí |
+| `DB_PASSWORD` | Contraseña de la base de datos | Sí en producción |
+| `APP_ENV` | Entorno: `local`, `staging` o `production` | Sí |
+| `HCAPTCHA_SITEKEY` | Clave pública de hCaptcha | No |
+| `HCAPTCHA_SECRET` | Secreto para validar hCaptcha en el servidor | No |
+| `GOOGLE_CLIENT_ID_OAUTH` | Identificador OAuth de Google | No |
+| `GOOGLE_SECRET_CLIENT` | Secreto OAuth de Google | No |
+| `GOOGLE_OAUTH_REDIRECT_URI` | URL de callback OAuth; debe usar HTTPS en producción | No |
+| `RESEND_API_KEY` | Credencial para el adaptador de correo Resend | No |
+| `RESEND_FROM` | Remitente autorizado en Resend, con formato `Nombre <correo@dominio>` | No |
+| `APP_URL` | URL pública base de la aplicación; obligatoria y HTTPS en producción | Sí en producción |
+| `ALLOWED_ORIGINS` | Lista separada por comas de orígenes adicionales permitidos | No |
 
-**Decisión de diseño:** Resend y Open-Meteo se llaman desde el **backend** para no exponer claves ni datos sensibles en el frontend (cumple R7). hCaptcha se valida en ambos extremos porque el challenge se resuelve en el navegador y se verifica en el servidor.
+En `production`, la configuración rechaza credenciales de ejemplo, una base local y una conexión no HTTPS. Nunca incluyas valores reales en documentación, commits ni archivos distribuidos.
 
----
+## Servicios externos y privacidad
 
-## 6. Despliegue
+| Servicio | Llamado por | Datos enviados | Comportamiento ante una falla |
+|---|---|---|---|
+| [ipwho.is](https://ipwho.is/) / [ip-api.com](https://ip-api.com/) | Backend PHP | Dirección IP del visitante al proveedor de geolocalización | Se usa Buenos Aires como ubicación de respaldo y el estado se informa en el widget. |
+| [Open-Meteo](https://open-meteo.com/) | Backend PHP | Latitud y longitud aproximadas | El resto de la aplicación sigue disponible. El navegador reintenta con espera exponencial, hasta 60 segundos entre intentos. |
+| [hCaptcha](https://www.hcaptcha.com/) | Navegador y backend, si se configura | Token del desafío y dirección IP para validación | Si no se configuran las claves, el desafío no se muestra. Si está activo y falla, se rechaza el formulario con un mensaje. |
+| [Google OAuth](https://developers.google.com/identity/protocols/oauth2) | Backend y redirección del navegador, si se configura | Datos básicos de identidad autorizados por la persona usuaria | El acceso tradicional con usuario y contraseña permanece disponible. |
+| [Resend](https://resend.com/) | Backend PHP, durante el registro | Dirección de correo, nombre de usuario y enlace de verificación | No se crea una cuenta sin que pueda enviarse su enlace de activación. |
 
-**Proveedor elegido:** InfinityFree (hosting compartido gratuito).  
-**Modelo:** PaaS/hosting compartido gestionado (no requiere administrar servidor Linux). Se eligió porque es gratuito, soporta PHP + MySQL remoto, ofrece HTTPS y es accesible desde cualquier dispositivo.
+Cuando se configuran `RESEND_API_KEY` y `RESEND_FROM`, el registro genera un token aleatorio de un solo uso, guarda únicamente su hash SHA-256 con vencimiento de 24 horas y envía el enlace `/verify_email.php` mediante Resend. La cuenta no puede iniciar sesión hasta que se confirme ese enlace. `RESEND_FROM` debe ser un remitente o dominio verificado en Resend. Si se usa el remitente de prueba `onboarding@resend.dev`, Resend sólo permite enviar al correo del titular de la cuenta.
 
-Pasos para volver a desplegar:
-1. Sube los archivos del repositorio al servidor (por FTP o el administrador de archivos de InfinityFree), excepto `.env`, `*.log`, `*.sql` y la carpeta `/uploads` (están en `.gitignore`).
-2. En el panel de InfinityFree, crea la base de datos MySQL y anota host, usuario, contraseña y nombre de BD.
-3. Crea el archivo `.env` directamente en el servidor (no se sube desde el repositorio) con las credenciales reales y `RESEND_API_KEY`.
-4. Importa `sql/schema.sql` en la base de datos remota (phpMyAdmin de InfinityFree).
-5. Asigna permisos: archivos PHP `644`, directorios `755`, `.env` `600`.
-6. Verifica que la URL responda por HTTPS desde una computadora y desde un celular con datos móviles (R6).
-7. No borres el despliegue después de entregar: el backend se usará en el TP N.º 2 (app Android).
+La ubicación no utiliza la API de geolocalización del navegador; se infiere de manera aproximada desde la IP. Las preferencias de modo oscuro y visibilidad de respuestas se guardan únicamente en `localStorage` del navegador.
 
-Para ejecutar el monitoreo de seguridad y los backups, usa `setup_security.sh` y `security_monitor.php` si tienes acceso a cron en el servidor; en hosting compartido gratuito estas tareas pueden limitarse.
+## Seguridad
 
----
+- Consultas preparadas PDO con emulación deshabilitada.
+- Contraseñas con `password_hash()`/bcrypt y verificación con `password_verify()`.
+- Cookies de sesión `HttpOnly`, `SameSite=Lax` y `Secure` bajo HTTPS; regeneración del identificador al autenticar.
+- Tokens CSRF, validación de origen y restricciones de `Content-Type` en operaciones sensibles.
+- Control de propiedad para editar, borrar comentarios y actualizar avatares.
+- Validación de entradas, límites de longitud, comprobación de UTF-8 y validación de imágenes antes de guardarlas.
+- Cabeceras CSP con nonce, HSTS en HTTPS, `X-Frame-Options`, `nosniff`, políticas de referencia y permisos restringidos.
+- `display_errors` desactivado y eventos relevantes enviados al log del servidor.
 
-## 7. Limitaciones conocidas
+La configuración ampliada y la operación de seguridad se documentan en [SECURITY.md](SECURITY.md) e [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md).
 
-- **Hosting compartido gratuito (InfinityFree):** puede bloquear peticiones que no provengan de navegadores (por ejemplo, la app Android del TP N.º 2 si intenta consumir la API como cliente no navegador). La PWA mitiga esto al ejecutarse dentro del navegador.
-- **No hay defensa oral:** la nota depende exclusivamente del entregable (URL pública, código y README).
-- **Sin WebSocket persistente:** las notificaciones se actualizan mediante sondeo corto (polling) cada 8 segundos solo en pestañas visibles, ya que InfinityFree no permite procesos persistentes.
-- **hCaptcha y Google OAuth son opcionales:** sin sus claves se ocultan los controles correspondientes; se mantienen disponibles el registro/login tradicional, los comentarios, los avatares y el clima por IP.
-- **Un solo nivel de respuestas:** no se permiten respuestas a respuestas (anidación limitada a 1 nivel).
+## Despliegue
 
-Declarar estos errores suma: un error escondido resta más (rúbrica del TP).
+La instancia pública actual se ejecuta en **InfinityFree**, con PHP, HTTPS y MySQL administrado por el proveedor. Para publicar una instancia propia:
 
----
+1. Creá una base MySQL y un usuario con permisos sobre esa base.
+2. Importá `sql/schema.sql`.
+3. Subí la aplicación al directorio público, sin incluir `.env`, registros ni copias de seguridad.
+4. Creá `.env` directamente en el servidor con las variables de producción.
+5. Creá `uploads/avatars/` con permisos de escritura para el proceso PHP.
+6. Configurá el dominio y HTTPS, y definí `GOOGLE_OAUTH_REDIRECT_URI` si se habilita OAuth.
+7. Verificá el registro, sesión, CRUD de comentarios, carga de avatar, notificaciones y clima desde una conexión externa.
 
-### Aportes
+Para un servidor propio con Apache o Nginx, certificados y tareas de mantenimiento, consultá [DEPLOYMENT.md](DEPLOYMENT.md). El archivo `.htaccess` incluido deshabilita el listado de directorios y bloquea el acceso directo a archivos `.env`, `.log` y `.sql` en servidores Apache compatibles.
 
-Trabajo individual. El integrante **Lautaro Hillkirk** creó el proyecto por sí solo; el requisito R10 (evidencia de participación por commits de todos los integrantes) **no aplica**.
+## Limitaciones conocidas
 
----
+- Las respuestas admiten un solo nivel de anidación.
+- Las notificaciones usan sondeo periódico mientras la pestaña está visible; no hay conexión WebSocket.
+- La ubicación por IP es estimada y puede usar Buenos Aires como valor de respaldo.
+- La disponibilidad de Google OAuth y hCaptcha depende de sus credenciales externas.
+- La verificación depende de la disponibilidad de Resend. Si el correo no se puede enviar, el registro se cancela para no dejar una cuenta inaccesible.
+- La estrategia de caché de `sw.js` está disponible en el proyecto; su registro desde el cliente debe verificarse o integrarse antes de depender de ella para uso sin conexión.
+- Los hostings compartidos pueden limitar procesos persistentes, cron o peticiones procedentes de clientes no convencionales.
 
-**Última actualización:** 20 de octubre de 2026  
-**Entrega:** martes 20/10/2026, hasta las 23:59 h, por el campus.
+## Documentación relacionada
+
+- [Guía de despliegue](DEPLOYMENT.md)
+- [Controles de seguridad](SECURITY.md)
+- [Respuesta a incidentes](INCIDENT_RESPONSE.md)
+- [Esquema de base de datos](sql/schema.sql)
