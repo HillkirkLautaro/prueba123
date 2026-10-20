@@ -111,7 +111,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Registro</title>
-    <link rel="stylesheet" href="styles.css">
+    <script nonce="<?= e($cspNonce); ?>">if (localStorage.getItem('darkMode') === 'true') document.documentElement.classList.add('dark-mode');</script>
+    <link rel="stylesheet" href="styles.css?v=6">
     <?php if (hcaptcha_is_configured()): ?>
         <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
     <?php endif; ?>

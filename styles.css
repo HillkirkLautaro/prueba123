@@ -713,6 +713,8 @@ body.dark-mode {
 
 .dark-mode .notification-link,
 .dark-mode .a-link,
+.dark-mode .auth-links a,
+.dark-mode .checkbox-label a,
 .dark-mode .site-footer a,
 .dark-mode .page-footer a {
     color: #93c5fd;
