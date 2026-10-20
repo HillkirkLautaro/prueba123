@@ -226,7 +226,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Comentarios</title>
-    <link rel="stylesheet" href="styles.css?v=4">
+    <link rel="stylesheet" href="styles.css?v=5">
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#2563eb">
     <script nonce="<?= e($cspNonce); ?>">if (localStorage.getItem('darkMode') === 'true') document.documentElement.classList.add('dark-mode');</script>
@@ -251,6 +251,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                 <span class="weather-temp" id="weatherTemp">--°</span>
                 <span class="weather-city" id="weatherCity">--</span>
             </div>
+            <span class="weather-status" id="weatherStatus" role="status" aria-live="polite">Consultando geolocalización y clima…</span>
             <?php if (is_logged_in()): ?>
                 <div>
                     <span class="muted">Hola, <?= e($_SESSION['username']); ?></span>
@@ -678,39 +679,66 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 
         // --- Clima en una esquina (Open-Meteo + geolocalización por IP, backend) ---
         let weatherRetryTimer = null;
+        let weatherRequestInFlight = false;
+        let weatherRetryAttempt = 0;
+        const weatherStatus = document.getElementById('weatherStatus');
+
+        function setWeatherStatus(message, isError = false) {
+            if (!weatherStatus) return;
+            weatherStatus.textContent = message;
+            weatherStatus.classList.toggle('is-error', isError);
+        }
+
+        function scheduleWeatherFetch(delay) {
+            if (weatherRetryTimer !== null) clearTimeout(weatherRetryTimer);
+            weatherRetryTimer = setTimeout(function () {
+                weatherRetryTimer = null;
+                fetchWeather();
+            }, delay);
+        }
+
         async function fetchWeather() {
+            if (weatherRequestInFlight) return;
+            weatherRequestInFlight = true;
+            setWeatherStatus(weatherRetryAttempt > 0
+                ? 'Reintentando geolocalización y clima…'
+                : 'Consultando geolocalización y clima…');
             try {
                 const resp = await fetch('api/weather.php', {
                     headers: { 'Accept': 'application/json' },
                     credentials: 'same-origin',
                     cache: 'no-store',
                 });
-                if (!resp.ok) throw new Error('HTTP ' + resp.status);
                 const data = await resp.json();
-                if (!data.success || !data.data) throw new Error('Respuesta de clima inválida');
+                if (!resp.ok || !data.success || !data.data) {
+                    throw new Error(data.status?.weather?.message || data.error || 'Respuesta de clima inválida');
+                }
                 const w = data.data;
                 const icon = w.weathercode <= 1 ? '☀️' : w.weathercode <= 3 ? '⛅' : '☁️';
                 document.getElementById('weatherIcon').textContent = icon;
                 document.getElementById('weatherTemp').textContent = Math.round(w.temperature) + '°';
                 document.getElementById('weatherCity').textContent = data.location?.city || 'Desconocida';
                 document.getElementById('weatherWidget').hidden = false;
-                if (weatherRetryTimer !== null) {
-                    clearTimeout(weatherRetryTimer);
-                    weatherRetryTimer = null;
-                }
-            } catch (_) {
-                // Reintentar pronto evita que un fallo transitorio oculte el
-                // clima durante toda la sesión.
-                if (weatherRetryTimer === null) {
-                    weatherRetryTimer = setTimeout(function () {
-                        weatherRetryTimer = null;
-                        fetchWeather();
-                    }, 15000);
-                }
+                const locationState = data.status?.geolocation?.message || 'Ubicación actualizada.';
+                const weatherState = data.status?.weather?.message || 'Clima actualizado correctamente.';
+                setWeatherStatus('Geolocalización: ' + locationState + ' Clima: ' + weatherState,
+                    data.status?.geolocation?.success === false);
+                weatherRetryAttempt = 0;
+                scheduleWeatherFetch(600000);
+            } catch (error) {
+                // Reintentos progresivos y acotados: continúan hasta lograr
+                // una respuesta, sin saturar el servidor ni bloquear sesión.
+                weatherRetryAttempt += 1;
+                const delay = Math.min(60000, 1000 * Math.pow(2, Math.min(weatherRetryAttempt, 6)));
+                const seconds = Math.ceil(delay / 1000);
+                setWeatherStatus('Clima: ' + (error.message || 'No disponible')
+                    + '. Reintentando en ' + seconds + ' s…', true);
+                scheduleWeatherFetch(delay);
+            } finally {
+                weatherRequestInFlight = false;
             }
         }
         fetchWeather();
-        setInterval(fetchWeather, 600000);
 
     </script>
     <footer class="site-footer">

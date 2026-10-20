@@ -59,7 +59,11 @@ function weather_get_current(float $latitude, float $longitude): array
 
     // Compatibilidad con la respuesta antigua de Open-Meteo y la actual.
     if (isset($data['current_weather']) && is_array($data['current_weather'])) {
-        return ['success' => true, 'data' => $data['current_weather']];
+        return [
+            'success' => true,
+            'data' => $data['current_weather'],
+            'message' => 'Clima actualizado correctamente.',
+        ];
     }
 
     $current = $data['current'] ?? null;
@@ -76,5 +80,6 @@ function weather_get_current(float $latitude, float $longitude): array
             'weathercode' => (int)$current['weather_code'],
             'time' => (string)($current['time'] ?? ''),
         ],
+        'message' => 'Clima actualizado correctamente.',
     ];
 }
