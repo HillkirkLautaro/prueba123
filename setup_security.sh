@@ -20,13 +20,13 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Variables
-PROJECT_DIR="/home/lau/Escritorio/repos/prueba123-main"
-DB_NAME="if0_42867030_base_prueba"
-DB_USER="if0_42867030"
-DB_PASSWORD="9DcaQPZVTx"
-BACKUP_DIR="/home/lau/Escritorio/repos/prueba123-main/backups"
-DOMAIN="prueba123.gt.tc"
+# Variables (se leen del entorno; valores por defecto son placeholders, nunca credenciales reales)
+PROJECT_DIR="${PROJECT_DIR:-.}"
+DB_NAME="${DB_NAME:-tu_base_de_datos}"
+DB_USER="${DB_USER:-tu_usuario}"
+DB_PASSWORD="${DB_PASSWORD:-tu_contraseña}"
+BACKUP_DIR="${BACKUP_DIR:-./backups}"
+DOMAIN="${DOMAIN:-tudominio.com}"
 
 echo -e "${BLUE}============================================${NC}"
 echo -e "${BLUE}  CONFIGURACIÓN DE SEGURIDAD - INICIO${NC}"
@@ -101,22 +101,20 @@ chmod 700 "$BACKUP_DIR"
 # Script de backup de base de datos
 cat > "$BACKUP_DIR/backup_db.sh" << 'EOF'
 #!/bin/bash
-# Backup de base de datos
-BACKUP_DIR="/home/lau/Escritorio/repos/prueba123-main/backups"
-DB_NAME="if0_42867030_base_prueba"
-DB_USER="if0_42867030"
-DB_PASSWORD="9DcaQPZVTx"
-DB_HOST="sql109.infinityfree.com"
+# Backup de base de datos - credenciales desde el entorno
+BACKUP_DIR="${BACKUP_DIR:-./backups}"
+DB_HOST="${DB_HOST:-sqlXXX.infinityfree.com}"
+DB_PORT="${DB_PORT:-3306}"
+DB_NAME="${DB_NAME:-tu_base_de_datos}"
+DB_USER="${DB_USER:-tu_usuario}"
+DB_PASSWORD="${DB_PASSWORD:-tu_contraseña}"
 DATE=$(date +%Y%m%d_%H%M%S)
 
-# Crear backup
-mysqldump -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" > "$BACKUP_DIR/db_${DATE}.sql"
+mkdir -p "$BACKUP_DIR"
 
-# Comprimir backup
+mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" > "$BACKUP_DIR/db_${DATE}.sql"
 gzip "$BACKUP_DIR/db_${DATE}.sql"
-
-# Eliminar backups antiguos (más de 30 días)
-find "$BACKUP_DIR" -name "db_*.sql.gz" -mtime +30 -delete
+find "$BACKUP_DIR" -name "db_*.sql.gz" -mtime +30 -delete 2>/dev/null
 
 echo "[$(date)] Backup de base de datos completado: db_${DATE}.sql.gz"
 EOF
@@ -126,16 +124,18 @@ chmod +x "$BACKUP_DIR/backup_db.sh"
 # Script de backup de archivos
 cat > "$BACKUP_DIR/backup_files.sh" << EOF
 #!/bin/bash
-# Backup de archivos
-BACKUP_DIR="$BACKUP_DIR"
-PROJECT_DIR="$PROJECT_DIR"
+# Backup de archivos - rutas desde el entorno
+BACKUP_DIR="${BACKUP_DIR}"
+PROJECT_DIR="${PROJECT_DIR}"
 DATE=\$(date +%Y%m%d_%H%M%S)
+
+mkdir -p "\$BACKUP_DIR"
 
 # Crear backup
 tar -czf "\$BACKUP_DIR/files_\${DATE}.tar.gz" -C "\$PROJECT_DIR" .
 
 # Eliminar backups antiguos (más de 30 días)
-find "\$BACKUP_DIR" -name "files_*.tar.gz" -mtime +30 -delete
+find "\$BACKUP_DIR" -name "files_*.tar.gz" -mtime +30 -delete 2>/dev/null
 
 echo "[\$(date)] Backup de archivos completado: files_\${DATE}.tar.gz"
 EOF

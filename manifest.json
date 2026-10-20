@@ -1,0 +1,19 @@
+{
+  "name": "Comentarios",
+  "short_name": "Comentarios",
+  "description": "App fullstack de comentarios - TP Integrador N.º 1",
+  "start_url": "/index.php",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f7fb",
+  "theme_color": "#2563eb",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjAgMTIwIj48cmVjdCB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgZmlsbD0iI2U1ZTdlYiIvPjxjaXJjbGUgY3g9IjYwIiBjeT0iNDYiIHI9IjIyIiBmaWxsPSIjOWNhM2FmIi8+PHBhdGggZD0iTTI0IDEwMGM4LTE4IDI5LTI4IDM2LTI4czI4IDEwIDM2IDI4IiBmaWxsPSIjOWNhM2FmIi8+PC9zdmc+",
+      "sizes": "120x120",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

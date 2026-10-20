@@ -224,7 +224,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Comentarios</title>
     <link rel="stylesheet" href="styles.css?v=3">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#2563eb">
     <script src="timezone.js?v=2" defer></script>
+    <script src="js/api-client.js" defer></script>
     <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
 </head>
 <body>
@@ -234,6 +237,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                 <?= e($flash['message']); ?>
             </div>
         <?php endif; ?>
+
+        <div id="js-flash" hidden></div>
 
         <div class="panel">
             <div class="topbar">
@@ -292,7 +297,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                     <div class="h-captcha" data-sitekey="<?= e($hcaptchaSitekey); ?>" data-size="invisible"></div>
 
                     <textarea name="contenido" placeholder="Escribe tu comentario..." required></textarea>
-                    <p><button type="submit">Publicar comentario</button></p>
+                    <p><button type="submit" id="btn-publicar">Publicar comentario</button></p>
                 </form>
             <?php endif; ?>
         </div>
@@ -531,6 +536,65 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
             }
 
         });
+
+        // --- Crear comentario vía fetch (API REST) sin recargar la página (R3) ---
+        const createForm = document.getElementById('create-comment-form');
+        const btnPublicar = document.getElementById('btn-publicar');
+        const textarea = createForm ? createForm.querySelector('textarea[name="contenido"]') : null;
+        const csrfInput = createForm ? createForm.querySelector('input[name="csrf_token"]') : null;
+
+        if (createForm && btnPublicar && textarea && csrfInput) {
+            createForm.addEventListener('submit', async function (event) {
+                event.preventDefault();
+                const contenido = textarea.value.trim();
+                if (contenido === '') {
+                    showFlash('Escribe un comentario antes de publicar.', 'error');
+                    return;
+                }
+                btnPublicar.disabled = true;
+                btnPublicar.textContent = 'Publicando...';
+
+                // Token de hCaptcha si el servicio está disponible
+                let captchaToken = '';
+                if (typeof hcaptcha !== 'undefined') {
+                    try {
+                        captchaToken = await hcaptcha.execute();
+                    } catch (_) {
+                        captchaToken = hcaptcha.getResponse() || '';
+                    }
+                }
+
+                try {
+                    await createComment(contenido, csrfInput.value, captchaToken);
+                    showFlash('Comentario publicado.', 'success');
+                    textarea.value = '';
+
+                    // Refrescar la lista de comentarios sin recargar (AJAX)
+                    const resp = await fetch(window.location.pathname + '?ajax=1&page=1', {
+                        headers: { 'Accept': 'text/html' },
+                        credentials: 'same-origin',
+                        cache: 'no-store',
+                    });
+                    if (resp.ok) {
+                        const html = await resp.text();
+                        const list = document.getElementById('comments-list');
+                        const empty = document.getElementById('empty-comments');
+                        if (list) {
+                            list.innerHTML = html;
+                            list.hidden = html.trim() === '';
+                        }
+                        if (empty) {
+                            empty.hidden = html.trim() !== '';
+                        }
+                    }
+                } catch (error) {
+                    showFlash(error.message || 'No se pudo publicar el comentario.', 'error');
+                } finally {
+                    btnPublicar.disabled = false;
+                    btnPublicar.textContent = 'Publicar comentario';
+                }
+            });
+        }
 
     </script>
     <footer class="site-footer">
