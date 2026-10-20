@@ -113,15 +113,6 @@ if ($method === 'POST') {
         json_error(403, 'Token CSRF inválido.');
     }
 
-    // hCaptcha invisible (anti-bot) cuando está configurado en el entorno
-    if ($hcaptchaSitekey !== '' && $hcaptchaSecret !== '') {
-        $captchaResponse = $data['h-captcha-response'] ?? '';
-        if (!verify_hcaptcha($captchaResponse, $_SERVER['REMOTE_ADDR'] ?? null)) {
-            log_security_event('bot_captcha_failed', 'API comment creation');
-            json_error(422, 'Verificación anti-bot fallida. Inténtalo de nuevo.');
-        }
-    }
-
     $contenido = trim((string)($data['contenido'] ?? ''));
 
     if ($contenido === '' || mb_strlen($contenido, 'UTF-8') < 1 || !mb_check_encoding($contenido, 'UTF-8') || mb_strlen($contenido, 'UTF-8') > 5000) {

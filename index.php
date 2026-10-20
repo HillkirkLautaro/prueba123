@@ -228,7 +228,6 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     <meta name="theme-color" content="#2563eb">
     <script src="timezone.js?v=2" defer></script>
     <script src="js/api-client.js" defer></script>
-    <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
 </head>
 <body>
     <div class="container">
@@ -295,11 +294,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                     <input type="hidden" name="action" value="create_comment">
                     <input type="hidden" name="csrf_token" value="<?= e(csrf_token()); ?>">
 
-                    <!-- Honeypot: campo invisible para detectar bots -->
+                    <!-- Honeypot: campo invisible para detectar bots (protección anti-bot simple) -->
                     <input type="text" name="website_url" style="display:none;position:absolute;left:-9999px;" tabindex="-1" autocomplete="off" aria-hidden="true">
-
-                    <!-- hCaptcha invisible -->
-                    <div class="h-captcha" data-sitekey="<?= e($hcaptchaSitekey); ?>" data-size="invisible"></div>
 
                     <textarea name="contenido" placeholder="Escribe tu comentario..." required></textarea>
                     <p><button type="submit" id="btn-publicar">Publicar comentario</button></p>
@@ -559,18 +555,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                 btnPublicar.disabled = true;
                 btnPublicar.textContent = 'Publicando...';
 
-                // Token de hCaptcha si el servicio está disponible
-                let captchaToken = '';
-                if (typeof hcaptcha !== 'undefined') {
-                    try {
-                        captchaToken = await hcaptcha.execute();
-                    } catch (_) {
-                        captchaToken = hcaptcha.getResponse() || '';
-                    }
-                }
-
                 try {
-                    await createComment(contenido, csrfInput.value, captchaToken);
+                    await createComment(contenido, csrfInput.value);
                     showFlash('Comentario publicado.', 'success');
                     textarea.value = '';
 

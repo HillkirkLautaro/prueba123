@@ -51,10 +51,10 @@ async function getComment(id) {
 /**
  * Crear un comentario (POST). Retorna { success, message, data: { id } }.
  * Lanza error 401/422/500 según corresponda.
- * @param {string} captchaToken - token de hCaptcha (opcional)
+ * Protección anti-bot simple: honeypot (campo oculto) del lado del servidor.
  */
-async function createComment(contenido, csrfToken, captchaToken = '') {
-    return fetchJson('', 'POST', { contenido, csrf_token: csrfToken, 'h-captcha-response': captchaToken });
+async function createComment(contenido, csrfToken) {
+    return fetchJson('', 'POST', { contenido, csrf_token: csrfToken });
 }
 
 /**
