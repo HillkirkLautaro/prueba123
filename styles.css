@@ -84,6 +84,52 @@ details summary {
     margin: 0 8px;
 }
 
+.settings-menu {
+    position: relative;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 8px;
+}
+
+.settings-button {
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: 50%;
+    background: #e5e7eb;
+    color: #111827;
+    font-size: 1.2rem;
+}
+
+.settings-dropdown {
+    position: absolute;
+    z-index: 10;
+    top: calc(100% + 10px);
+    right: 0;
+    width: 250px;
+    padding: 14px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+}
+
+.settings-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin: 14px 0 0;
+    font-weight: 400;
+}
+
+.show-more-replies {
+    margin: 14px 0 0 28px;
+    padding: 7px 12px;
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
 .notification-bell {
     position: relative;
     width: 42px;
@@ -578,4 +624,79 @@ button,
 
 .page-footer a:hover {
     text-decoration: underline;
+}
+
+/* Tema oscuro, activado desde el menú de configuración. */
+html.dark-mode body,
+body.dark-mode {
+    background: #111827;
+    color: #e5e7eb;
+}
+
+.dark-mode .card,
+.dark-mode .panel,
+.dark-mode .comment,
+.dark-mode .legal-content,
+.dark-mode .notification-dropdown,
+.dark-mode .settings-dropdown {
+    background: #1f2937;
+    border-color: #374151;
+    color: #e5e7eb;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+}
+
+.dark-mode .comment-reply {
+    border-left-color: #2563eb;
+}
+
+.dark-mode .meta,
+.dark-mode .muted,
+.dark-mode .profile-meta,
+.dark-mode .site-footer,
+.dark-mode .page-footer,
+.dark-mode .last-update {
+    color: #9ca3af;
+}
+
+.dark-mode textarea,
+.dark-mode input[type="text"],
+.dark-mode input[type="email"],
+.dark-mode input[type="password"] {
+    background: #111827;
+    border-color: #4b5563;
+    color: #f9fafb;
+}
+
+.dark-mode .btn-secondary,
+.dark-mode .notification-bell,
+.dark-mode .settings-button,
+.dark-mode .page-link {
+    background: #374151;
+    color: #f9fafb;
+    border-color: #4b5563;
+}
+
+.dark-mode .show-more-replies {
+    background: #1e3a8a;
+    color: #dbeafe;
+}
+
+.dark-mode .notification-item,
+.dark-mode .notification-dropdown-header,
+.dark-mode .site-footer,
+.dark-mode .page-footer {
+    border-color: #374151;
+}
+
+.dark-mode .notification-link,
+.dark-mode .a-link,
+.dark-mode .site-footer a,
+.dark-mode .page-footer a {
+    color: #93c5fd;
+}
+
+.dark-mode .weather-widget {
+    background: rgba(31, 41, 55, 0.92);
+    border-color: #4b5563;
+    color: #e5e7eb;
 }

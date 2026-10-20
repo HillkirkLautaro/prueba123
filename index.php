@@ -65,6 +65,9 @@ function render_comment(array $comment, array $replies, string $defaultAvatar): 
         <?php endif; ?>
         <div class="replies-list" data-parent-id="<?= (int)$comment['id']; ?>">
             <?php foreach ($replies as $reply): ?><?php render_comment($reply, [], $defaultAvatar); ?><?php endforeach; ?>
+            <?php if ($replies): ?>
+                <button type="button" class="show-more-replies" hidden aria-label="Mostrar 3 respuestas más">+ <span>Ver 3 respuestas</span></button>
+            <?php endif; ?>
         </div>
     </article>
     <?php
@@ -223,9 +226,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Comentarios</title>
-    <link rel="stylesheet" href="styles.css?v=3">
+    <link rel="stylesheet" href="styles.css?v=4">
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#2563eb">
+    <script nonce="<?= e($cspNonce); ?>">if (localStorage.getItem('darkMode') === 'true') document.documentElement.classList.add('dark-mode');</script>
     <script src="timezone.js?v=2" defer></script>
     <script src="js/api-client.js" defer></script>
 </head>
@@ -273,6 +277,22 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                                 <input type="hidden" name="csrf_token" value="<?= e(csrf_token()); ?>">
                                 <button type="submit" class="btn btn-secondary">Marcar como leídas</button>
                             </form>
+                        </div>
+                    </div>
+                    <div class="settings-menu">
+                        <button type="button" class="settings-button" id="settingsButton" aria-label="Abrir configuración" aria-expanded="false">
+                            <span aria-hidden="true">⚙️</span>
+                        </button>
+                        <div class="settings-dropdown" id="settingsDropdown" hidden>
+                            <strong>Configuración</strong>
+                            <label class="settings-option">
+                                <span>Modo oscuro</span>
+                                <input type="checkbox" id="darkModeToggle" role="switch">
+                            </label>
+                            <label class="settings-option">
+                                <span>Mostrar respuestas</span>
+                                <input type="checkbox" id="repliesVisibilityToggle" role="switch" checked>
+                            </label>
                         </div>
                     </div>
                     <a class="btn btn-secondary" href="profile.php?id=<?= (int)$_SESSION['user_id']; ?>">Mi perfil</a>
@@ -346,6 +366,57 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         const notificationCount = document.getElementById('notificationCount');
         const notificationList = document.getElementById('notificationList');
         const notificationStatus = document.getElementById('notificationStatus');
+        const settingsButton = document.getElementById('settingsButton');
+        const settingsDropdown = document.getElementById('settingsDropdown');
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        const repliesVisibilityToggle = document.getElementById('repliesVisibilityToggle');
+
+        function updateRepliesVisibility() {
+            const hideReplies = localStorage.getItem('repliesHidden') === 'true';
+            document.querySelectorAll('.replies-list').forEach(function (list) {
+                const replies = Array.from(list.querySelectorAll(':scope > .comment-reply'));
+                const showMoreButton = list.querySelector(':scope > .show-more-replies');
+                if (!hideReplies) {
+                    replies.forEach(function (reply) { reply.hidden = false; });
+                    if (showMoreButton) showMoreButton.hidden = true;
+                    return;
+                }
+
+                const visibleReplies = Number(list.dataset.visibleReplies || 0);
+                replies.forEach(function (reply, index) { reply.hidden = index >= visibleReplies; });
+                if (showMoreButton) {
+                    const remaining = replies.length - visibleReplies;
+                    showMoreButton.hidden = remaining <= 0;
+                    showMoreButton.querySelector('span').textContent = remaining > 3
+                        ? 'Ver 3 respuestas'
+                        : 'Ver ' + remaining + ' respuesta' + (remaining === 1 ? '' : 's');
+                }
+            });
+        }
+
+        if (settingsButton && settingsDropdown && darkModeToggle && repliesVisibilityToggle) {
+            const isDarkMode = localStorage.getItem('darkMode') === 'true';
+            const repliesHidden = localStorage.getItem('repliesHidden') === 'true';
+            darkModeToggle.checked = isDarkMode;
+            repliesVisibilityToggle.checked = !repliesHidden;
+            document.body.classList.toggle('dark-mode', isDarkMode);
+
+            settingsButton.addEventListener('click', function () {
+                settingsDropdown.hidden = !settingsDropdown.hidden;
+                settingsButton.setAttribute('aria-expanded', String(!settingsDropdown.hidden));
+            });
+            darkModeToggle.addEventListener('change', function () {
+                document.documentElement.classList.toggle('dark-mode', darkModeToggle.checked);
+                document.body.classList.toggle('dark-mode', darkModeToggle.checked);
+                localStorage.setItem('darkMode', String(darkModeToggle.checked));
+            });
+            repliesVisibilityToggle.addEventListener('change', function () {
+                localStorage.setItem('repliesHidden', String(!repliesVisibilityToggle.checked));
+                document.querySelectorAll('.replies-list').forEach(function (list) { delete list.dataset.visibleReplies; });
+                updateRepliesVisibility();
+            });
+        }
+        updateRepliesVisibility();
 
         function formatNotificationDate(dateString) {
             const normalizedDate = String(dateString).replace(' ', 'T');
@@ -446,6 +517,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                     dropdown.hidden = true;
                     bell.setAttribute('aria-expanded', 'false');
                 }
+                if (!event.target.closest('.settings-menu') && settingsDropdown && settingsButton) {
+                    settingsDropdown.hidden = true;
+                    settingsButton.setAttribute('aria-expanded', 'false');
+                }
             });
 
             // InfinityFree no permite ejecutar un proceso WebSocket persistente.
@@ -481,6 +556,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                 emptyComments.hidden = hasComments;
             }
             formatDynamicDates(commentsList);
+            updateRepliesVisibility();
             lastCommentsHtml = html;
         }
 
@@ -532,6 +608,14 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         }
 
         document.addEventListener('click', function (event) {
+            const showMoreReplies = event.target.closest('.show-more-replies');
+            if (showMoreReplies) {
+                const list = showMoreReplies.closest('.replies-list');
+                list.dataset.visibleReplies = String(Number(list.dataset.visibleReplies || 0) + 3);
+                updateRepliesVisibility();
+                return;
+            }
+
             const toggle = event.target.closest('.reply-toggle');
             if (toggle) {
                 const form = document.getElementById(toggle.dataset.target);
