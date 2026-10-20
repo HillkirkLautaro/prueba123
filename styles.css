@@ -130,6 +130,13 @@ details summary {
     color: #1d4ed8;
 }
 
+.hide-replies {
+    margin: 14px 0 0 8px;
+    padding: 7px 12px;
+    background: #e5e7eb;
+    color: #374151;
+}
+
 .notification-bell {
     position: relative;
     width: 42px;
@@ -671,7 +678,8 @@ body.dark-mode {
 .dark-mode textarea,
 .dark-mode input[type="text"],
 .dark-mode input[type="email"],
-.dark-mode input[type="password"] {
+.dark-mode input[type="password"],
+.dark-mode input[type="file"] {
     background: #111827;
     border-color: #4b5563;
     color: #f9fafb;
@@ -689,6 +697,11 @@ body.dark-mode {
 .dark-mode .show-more-replies {
     background: #1e3a8a;
     color: #dbeafe;
+}
+
+.dark-mode .hide-replies {
+    background: #374151;
+    color: #e5e7eb;
 }
 
 .dark-mode .notification-item,

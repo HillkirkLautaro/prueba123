@@ -67,6 +67,7 @@ function render_comment(array $comment, array $replies, string $defaultAvatar): 
             <?php foreach ($replies as $reply): ?><?php render_comment($reply, [], $defaultAvatar); ?><?php endforeach; ?>
             <?php if ($replies): ?>
                 <button type="button" class="show-more-replies" hidden aria-label="Mostrar 3 respuestas más">+ <span>Ver 3 respuestas</span></button>
+                <button type="button" class="hide-replies" hidden>Dejar de mostrar respuestas</button>
             <?php endif; ?>
         </div>
     </article>
@@ -226,7 +227,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Comentarios</title>
-    <link rel="stylesheet" href="styles.css?v=5">
+    <link rel="stylesheet" href="styles.css?v=6">
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#2563eb">
     <script nonce="<?= e($cspNonce); ?>">if (localStorage.getItem('darkMode') === 'true') document.documentElement.classList.add('dark-mode');</script>
@@ -377,14 +378,18 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
             document.querySelectorAll('.replies-list').forEach(function (list) {
                 const replies = Array.from(list.querySelectorAll(':scope > .comment-reply'));
                 const showMoreButton = list.querySelector(':scope > .show-more-replies');
-                if (!hideReplies) {
+                const hideRepliesButton = list.querySelector(':scope > .hide-replies');
+                const isManuallyCollapsed = list.dataset.repliesCollapsed === 'true';
+                if (!hideReplies && !isManuallyCollapsed) {
                     replies.forEach(function (reply) { reply.hidden = false; });
                     if (showMoreButton) showMoreButton.hidden = true;
+                    if (hideRepliesButton) hideRepliesButton.hidden = replies.length === 0;
                     return;
                 }
 
                 const visibleReplies = Number(list.dataset.visibleReplies || 0);
                 replies.forEach(function (reply, index) { reply.hidden = index >= visibleReplies; });
+                if (hideRepliesButton) hideRepliesButton.hidden = visibleReplies === 0;
                 if (showMoreButton) {
                     const remaining = replies.length - visibleReplies;
                     showMoreButton.hidden = remaining <= 0;
@@ -413,7 +418,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
             });
             repliesVisibilityToggle.addEventListener('change', function () {
                 localStorage.setItem('repliesHidden', String(!repliesVisibilityToggle.checked));
-                document.querySelectorAll('.replies-list').forEach(function (list) { delete list.dataset.visibleReplies; });
+                document.querySelectorAll('.replies-list').forEach(function (list) {
+                    delete list.dataset.visibleReplies;
+                    delete list.dataset.repliesCollapsed;
+                });
                 updateRepliesVisibility();
             });
         }
@@ -612,7 +620,17 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
             const showMoreReplies = event.target.closest('.show-more-replies');
             if (showMoreReplies) {
                 const list = showMoreReplies.closest('.replies-list');
+                list.dataset.repliesCollapsed = 'true';
                 list.dataset.visibleReplies = String(Number(list.dataset.visibleReplies || 0) + 3);
+                updateRepliesVisibility();
+                return;
+            }
+
+            const hideReplies = event.target.closest('.hide-replies');
+            if (hideReplies) {
+                const list = hideReplies.closest('.replies-list');
+                list.dataset.repliesCollapsed = 'true';
+                list.dataset.visibleReplies = '0';
                 updateRepliesVisibility();
                 return;
             }
