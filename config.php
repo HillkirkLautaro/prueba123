@@ -106,7 +106,7 @@ if ($appEnv === 'production') {
         exit('Application configuration unavailable.');
     }
 
-    if ($appUrl === '' || !filter_var($appUrl, FILTER_VALIDATE_URL) || strpos(strtolower($appUrl), 'https://') !== 0) {
+    if ($appUrl !== '' && (!filter_var($appUrl, FILTER_VALIDATE_URL) || strpos(strtolower($appUrl), 'https://') !== 0)) {
         error_log('Production APP_URL must use HTTPS.');
         http_response_code(500);
         exit('Application configuration unavailable.');

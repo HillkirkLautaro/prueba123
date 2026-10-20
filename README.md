@@ -133,7 +133,7 @@ Estas rutas validan sesión, origen y/o token CSRF según la acción. Las respue
 | `GOOGLE_OAUTH_REDIRECT_URI` | URL de callback OAuth; debe usar HTTPS en producción | No |
 | `RESEND_API_KEY` | Credencial para el adaptador de correo Resend | No |
 | `RESEND_FROM` | Remitente autorizado en Resend, con formato `Nombre <correo@dominio>` | No |
-| `APP_URL` | URL pública base de la aplicación; obligatoria y HTTPS en producción | Sí en producción |
+| `APP_URL` | URL pública base de la aplicación; si se omite, se usa la URL de la petición para el enlace de verificación | No |
 | `ALLOWED_ORIGINS` | Lista separada por comas de orígenes adicionales permitidos | No |
 
 En `production`, la configuración rechaza credenciales de ejemplo, una base local y una conexión no HTTPS. Nunca incluyas valores reales en documentación, commits ni archivos distribuidos.
