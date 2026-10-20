@@ -20,6 +20,59 @@ La app está desplegada en **InfinityFree**, accesible por **HTTPS** desde cualq
 
 ---
 
+## 0. Estructura de carpetas
+
+```
+prueba123/
+├── api/                 # Endpoints REST (accesibles por URL)
+│   ├── comentarios.php  # CRUD de comentarios (GET, POST, PUT, DELETE)
+│   └── weather.php      # Clima actual (Open-Meteo + geolocalización por IP)
+├── src/
+│   └── services/        # Servicios backend internos (no accedidos directamente)
+│       ├── ip_location.php   # Geolocalización por IP (ip-api.com)
+│       ├── resend.php        # Email transaccional (Resend)
+│       └── weather.php       # Clima (Open-Meteo)
+├── js/
+│   └── api-client.js    # Cliente fetch para la API REST (sin recargar página)
+├── sql/
+│   └── schema.sql       # Script SQL para crear la base de datos
+├── backups/
+│   ├── backup_db.sh     # Backup automático de MySQL
+│   └── backup_files.sh  # Backup automático de archivos
+├── (puntos de entrada PHP públicos en raíz)
+│   ├── index.php        # Página principal (comentarios + widget clima)
+│   ├── login.php        # Autenticación
+│   ├── register.php     # Registro de usuarios
+│   ├── profile.php      # Perfil y avatar
+│   ├── edit.php         # Editar comentario
+│   ├── delete.php       # Eliminar comentario
+│   ├── actions.php      # Responder y votar comentarios
+│   ├── notifications.php# Notificaciones (GET/POST)
+│   ├── logout.php       # Cierre de sesión
+│   ├── google_login.php # OAuth con Google
+│   ├── google_callback.php# Callback OAuth Google
+│   ├── terminos.php     # Términos y Condiciones
+│   ├── privacidad.php   # Política de Privacidad
+│   ├── config.php       # Configuración, DB, sesiones, cabeceras de seguridad
+│   ├── csrf.php         # Tokens CSRF
+│   └── security_monitor.php # Monitoreo de seguridad (CLI/cron)
+├── styles.css           # Hojas de estilo
+├── manifest.json        # Manifiesto PWA
+├── sw.js                # Service Worker PWA
+├── timezone.js          # Formateo de fechas en zona horaria local
+├── .env.example         # Plantilla de variables de entorno (no subir .env real)
+├── .gitignore           # Archivos ignorados por git
+├── .htaccess            # Restricción de acceso a archivos sensibles
+├── README.md            # Este archivo (entregable)
+├── DEPLOYMENT.md        # Guía de despliegue
+├── SECURITY.md          # Documentación de seguridad
+└── INCIDENT_RESPONSE.md # Procedimientos de respuesta a incidentes
+```
+
+> ⚠️ Los archivos de punto de entrada PHP (`index.php`, `login.php`, etc.) deben permanecer en la raíz porque InfinityFree es hosting compartido y no permite cambiar el document root. Los servicios internos en `src/services/` no se acceden directamente por URL; son incluidos por los endpoints de `api/`.
+
+---
+
 ## 2. Cómo correrla en local (XAMPP)
 
 1. Instala [XAMPP](https://www.apachefriends.org/) (Apache + PHP 8.0+ + MySQL).
