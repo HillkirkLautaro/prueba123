@@ -9,8 +9,8 @@ if (is_logged_in()) {
 }
 
 if ($googleClientId === '' || $googleClientSecret === '') {
-    http_response_code(503);
-    exit('Google OAuth no está configurado.');
+    $_SESSION['flash'] = ['type' => 'error', 'message' => 'El inicio de sesión con Google no está configurado. Usa tu usuario y contraseña.'];
+    redirect((($_GET['return'] ?? '') === 'register') ? 'register.php' : 'login.php');
 }
 
 if ($appEnv === 'production' && $googleRedirectUri === '') {

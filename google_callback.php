@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/config.php';
 
-function oauth_error(string $message): never
+function oauth_error(string $message): void
 {
     // No registrar valores sensibles, solo indicadores de error
     error_log("OAuth Error: {$message}");

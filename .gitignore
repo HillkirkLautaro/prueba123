@@ -1,4 +1,7 @@
 .env
 *.log
 /*.sql
-/uploads
+/uploads/*
+!/uploads/
+!/uploads/avatars/
+!/uploads/avatars/.gitkeep

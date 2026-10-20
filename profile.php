@@ -52,19 +52,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('profile.php?id=' . $userId);
     }
 
-    if (!isset($_FILES['avatar']) || $_FILES['avatar']['error'] !== UPLOAD_ERR_OK) {
+    $file = $_FILES['avatar'] ?? null;
+    if (!is_array($file) || (int)($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'No se recibió una imagen válida.'];
         redirect('profile.php?id=' . $userId);
     }
 
-    $file = $_FILES['avatar'];
-    if (!is_uploaded_file($file['tmp_name']) || $file['size'] <= 0 || $file['size'] > 2 * 1024 * 1024) {
+    if (!isset($file['tmp_name'], $file['size'])
+        || !is_string($file['tmp_name'])
+        || !is_uploaded_file($file['tmp_name'])
+        || (int)$file['size'] <= 0
+        || (int)$file['size'] > 2 * 1024 * 1024) {
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'La imagen debe pesar menos de 2 MB.'];
         redirect('profile.php?id=' . $userId);
     }
 
-    $finfo = new finfo(FILEINFO_MIME_TYPE);
-    $mime = $finfo->file($file['tmp_name']);
+    $mime = false;
+    if (class_exists('finfo')) {
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        $mime = $finfo->file($file['tmp_name']);
+    } elseif (function_exists('mime_content_type')) {
+        $mime = @mime_content_type($file['tmp_name']);
+    }
+
+    // Algunos hostings no habilitan Fileinfo; getimagesize también permite
+    // validar que el archivo sea una imagen real y conocer su MIME.
+    if ($mime === false) {
+        $imageInfo = @getimagesize($file['tmp_name']);
+        $mime = is_array($imageInfo) && isset($imageInfo['mime']) ? $imageInfo['mime'] : false;
+    }
+
     if ($mime === false) {
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'No se pudo detectar el tipo MIME de la imagen.'];
         redirect('profile.php?id=' . $userId);
@@ -99,6 +116,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    if (!is_writable($uploadDir)) {
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'El directorio de avatars no permite guardar archivos.'];
+        redirect('profile.php?id=' . $userId);
+    }
+
     $safeName = 'profile_' . (int)$userId . '_' . bin2hex(random_bytes(16)) . '.' . $extReal;
     $targetPath = $uploadDir . '/' . $safeName;
 
@@ -107,21 +129,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('profile.php?id=' . $userId);
     }
 
-    // Borrar avatar anterior si existe y no es el default para evitar acumular basura en el servidor
+    $avatarPath = 'uploads/avatars/' . $safeName;
+    try {
+        $update = $pdo->prepare('UPDATE usuarios SET avatar = :avatar WHERE id = :id LIMIT 1');
+        $update->execute([
+            ':avatar' => $avatarPath,
+            ':id' => $userId,
+        ]);
+    } catch (PDOException $exception) {
+        @unlink($targetPath);
+        error_log('Profile avatar update failed: ' . $exception->getMessage());
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'No se pudo actualizar la foto de perfil.'];
+        redirect('profile.php?id=' . $userId);
+    }
+
+    // Borrar avatar anterior solo después de actualizar la referencia en la BD.
     if (!empty($profile['avatar'])) {
-        $oldFilename = basename($profile['avatar']);
+        $oldFilename = basename((string)$profile['avatar']);
         $oldPath = __DIR__ . '/uploads/avatars/' . $oldFilename;
-        if ($oldFilename !== 'default.png' && file_exists($oldPath)) {
+        if ($oldFilename !== 'default.png' && $oldFilename !== $safeName && file_exists($oldPath)) {
             @unlink($oldPath);
         }
     }
-
-    $avatarPath = 'uploads/avatars/' . $safeName;
-    $update = $pdo->prepare('UPDATE usuarios SET avatar = :avatar WHERE id = :id LIMIT 1');
-    $update->execute([
-        ':avatar' => $avatarPath,
-        ':id' => $userId,
-    ]);
 
     $_SESSION['flash'] = ['type' => 'success', 'message' => 'Foto de perfil actualizada correctamente.'];
     redirect('profile.php?id=' . $userId);
@@ -170,6 +199,7 @@ if (!empty($profile['avatar']) && is_string($profile['avatar'])) {
         <?php endif; ?>
 
         <div class="panel profile-card">
+            <p><a class="btn btn-secondary" href="index.php">Volver al menú principal</a></p>
             <div class="profile-header">
                 <img class="avatar" src="<?= e($avatar); ?>" alt="Avatar de <?= e($profile['username']); ?>">
                 <div>
@@ -283,23 +313,29 @@ if (!empty($profile['avatar']) && is_string($profile['avatar'])) {
 
                 const reader = new FileReader();
                 reader.onload = function (event) {
-                    cropperWrap.style.display = 'block';
-                    cropperImage.src = event.target.result;
-
-                    if (cropper) {
-                        cropper.destroy();
+                    if (typeof Cropper !== 'function') {
+                        cropperWrap.style.display = 'none';
+                        return;
                     }
 
-                    cropper = new Cropper(cropperImage, {
-                        aspectRatio: 1,
-                        viewMode: 1,
-                        dragMode: 'move',
-                        autoCropArea: 1,
-                        responsive: true,
-                        scalable: true,
-                        zoomable: true,
-                        movable: true,
-                    });
+                    cropperImage.onload = function () {
+                        if (cropper) {
+                            cropper.destroy();
+                        }
+
+                        cropper = new Cropper(cropperImage, {
+                            aspectRatio: 1,
+                            viewMode: 1,
+                            dragMode: 'move',
+                            autoCropArea: 1,
+                            responsive: true,
+                            scalable: true,
+                            zoomable: true,
+                            movable: true,
+                        });
+                    };
+                    cropperWrap.style.display = 'block';
+                    cropperImage.src = event.target.result;
                 };
 
                 reader.readAsDataURL(file);
@@ -354,33 +390,10 @@ if (!empty($profile['avatar']) && is_string($profile['avatar'])) {
                 originalFile = null;
             });
 
-            form.addEventListener('submit', function (event) {
-                event.preventDefault();
-
-                if (!fileInput.files || !fileInput.files[0]) {
-                    alert('Selecciona una imagen primero.');
-                    return;
-                }
-
-                const formData = new FormData();
-                formData.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
-                formData.append('avatar', fileInput.files[0], fileInput.files[0].name);
-
-                fetch(form.action, {
-                    method: 'POST',
-                    body: formData,
-                    credentials: 'same-origin'
-                }).then(function (response) {
-                    if (!response.ok) {
-                        throw new Error('HTTP ' + response.status);
-                    }
-
-                    window.location.reload();
-                }).catch(function (error) {
-                    console.error(error);
-                    alert('No se pudo subir el avatar.');
-                });
-            });
+            // Se conserva el envío nativo multipart/form-data. Así el avatar
+            // funciona incluso si la librería de recorte o la red externa no
+            // están disponibles; el servidor muestra el resultado mediante
+            // el mensaje flash correspondiente.
         });
     </script>
 </body>

@@ -12,7 +12,9 @@ require __DIR__ . '/../src/services/weather.php';
 // Obtener ubicación del usuario desde su IP
 $location = location_from_ip();
 
-$result = weather_get_current($location['latitude'], $location['longitude']);
+$latitude = (float)($location['latitude'] ?? -34.6037);
+$longitude = (float)($location['longitude'] ?? -58.3816);
+$result = weather_get_current($latitude, $longitude);
 
 if ($result['success'] === true) {
     http_response_code(200);
@@ -21,9 +23,9 @@ if ($result['success'] === true) {
         'data' => $result['data'],
         'location' => [
             'city' => $location['city'],
-            'latitude' => $location['latitude'],
-            'longitude' => $location['longitude'],
-            'source' => $location['source'],
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'source' => $location['source'] ?? 'fallback',
         ],
     ], JSON_UNESCAPED_UNICODE);
     exit;
@@ -35,6 +37,6 @@ echo json_encode([
     'error' => $result['error'],
     'location' => [
         'city' => $location['city'],
-        'source' => $location['source'],
+        'source' => $location['source'] ?? 'fallback',
     ],
 ], JSON_UNESCAPED_UNICODE);

@@ -105,13 +105,7 @@ if ($appEnv === 'production') {
         exit('Application configuration unavailable.');
     }
 
-    if ($hcaptchaSitekey === '' || $hcaptchaSecret === '') {
-        error_log('Production hCaptcha credentials are not configured.');
-        http_response_code(500);
-        exit('Application configuration unavailable.');
-    }
-
-    if ($googleRedirectUri !== '' && !str_starts_with(strtolower($googleRedirectUri), 'https://')) {
+    if ($googleRedirectUri !== '' && strpos(strtolower($googleRedirectUri), 'https://') !== 0) {
         error_log('Production Google OAuth redirect URI must use HTTPS.');
         http_response_code(500);
         exit('Application configuration unavailable.');
@@ -150,7 +144,7 @@ try {
     error_log('Database connection failed. PDO code: ' . $e->getCode());
     http_response_code(503);
     $isAjaxRequest = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'fetch'
-        || str_contains((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json')
+        || strpos((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json') !== false
         || ($_GET['ajax'] ?? '') === '1';
     if ($isAjaxRequest) {
         header('Content-Type: application/json; charset=utf-8');
@@ -253,6 +247,20 @@ if (!function_exists('utc_datetime_iso')) {
     }
 }
 
+if (!function_exists('hcaptcha_is_configured')) {
+    /**
+     * hCaptcha es opcional: solo se activa cuando están disponibles ambas
+     * credenciales. La autenticación básica y el resto de la aplicación no
+     * deben depender de un servicio externo opcional.
+     */
+    function hcaptcha_is_configured(): bool
+    {
+        global $hcaptchaSitekey, $hcaptchaSecret;
+
+        return trim((string)$hcaptchaSitekey) !== '' && trim((string)$hcaptchaSecret) !== '';
+    }
+}
+
 if (!function_exists('redirect')) {
     function redirect(string $location): void
     {
@@ -266,7 +274,11 @@ if (!function_exists('verify_hcaptcha')) {
     {
         global $hcaptchaSecret;
 
-        if ($hcaptchaSecret === '' || $response === '') {
+        if (!hcaptcha_is_configured()) {
+            return true;
+        }
+
+        if ($response === '') {
             return false;
         }
 
@@ -346,6 +358,8 @@ if (!function_exists('check_rate_limit')) {
 if (!function_exists('validate_ajax_origin')) {
     function validate_ajax_origin(): bool
     {
+        global $env;
+
         // Lista de orígenes permitidos (configurar según entorno)
         $allowedOrigins = [
             'https://' . ($_SERVER['HTTP_HOST'] ?? ''),
@@ -355,7 +369,7 @@ if (!function_exists('validate_ajax_origin')) {
         // Agregar orígenes adicionales desde configuración
         $additionalOrigins = env_value($env, 'ALLOWED_ORIGINS', '');
         if ($additionalOrigins !== '') {
-            $allowedOrigins = array_merge($allowedOrigins, explode(',', $additionalOrigins));
+            $allowedOrigins = array_merge($allowedOrigins, array_map('trim', explode(',', $additionalOrigins)));
         }
         
         $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
@@ -384,7 +398,7 @@ if (!function_exists('validate_ajax_origin')) {
         if ($referer !== '') {
             $refererValid = false;
             foreach ($allowedOrigins as $allowed) {
-                if (str_starts_with($referer, $allowed)) {
+                if (strpos($referer, $allowed) === 0) {
                     $refererValid = true;
                     break;
                 }
@@ -407,7 +421,7 @@ if (!function_exists('validate_content_type')) {
         }
         
         foreach ($allowedTypes as $allowed) {
-            if (str_contains($contentType, $allowed)) {
+            if (strpos($contentType, $allowed) !== false) {
                 return true;
             }
         }
@@ -451,6 +465,8 @@ if (!function_exists('sanitize_html')) {
 if (!function_exists('validate_request_origin')) {
     function validate_request_origin(): bool
     {
+        global $env;
+
         $allowedOrigins = [
             'https://' . ($_SERVER['HTTP_HOST'] ?? ''),
             'http://' . ($_SERVER['HTTP_HOST'] ?? ''),
@@ -458,7 +474,7 @@ if (!function_exists('validate_request_origin')) {
         
         $additionalOrigins = env_value($env, 'ALLOWED_ORIGINS', '');
         if ($additionalOrigins !== '') {
-            $allowedOrigins = array_merge($allowedOrigins, explode(',', $additionalOrigins));
+            $allowedOrigins = array_merge($allowedOrigins, array_map('trim', explode(',', $additionalOrigins)));
         }
         
         $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
@@ -481,7 +497,7 @@ if (!function_exists('validate_request_origin')) {
         // Validar Referer como fallback
         if ($referer !== '') {
             foreach ($allowedOrigins as $allowed) {
-                if (str_starts_with($referer, $allowed)) {
+                if (strpos($referer, $allowed) === 0) {
                     return true;
                 }
             }

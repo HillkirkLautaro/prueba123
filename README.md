@@ -93,7 +93,7 @@ prueba123/
    APP_ENV=local
    ```
    ⚠️ El archivo `.env` **no se sube al repositorio** (está en `.gitignore`).
-5. Si usas hCaptcha y Google OAuth, completa `HCAPTCHA_SITEKEY`, `HCAPTCHA_SECRET`, `GOOGLE_CLIENT_ID_OAUTH`, `GOOGLE_SECRET_CLIENT` y `GOOGLE_OAUTH_REDIRECT_URI` en `.env`. Son opcionales para probar en local.
+5. Si usas hCaptcha y Google OAuth, completa `HCAPTCHA_SITEKEY`, `HCAPTCHA_SECRET`, `GOOGLE_CLIENT_ID_OAUTH`, `GOOGLE_SECRET_CLIENT` y `GOOGLE_OAUTH_REDIRECT_URI` en `.env`. Son integraciones opcionales: sin esas variables funcionan el registro/login con usuario y contraseña y el resto de la aplicación.
 6. Accede a `http://localhost/prueba123/index.php`.
 
 El script `sql/schema.sql` crea las tablas `usuarios`, `comentarios`, `votos` y `notificaciones` con sus relaciones y claves foráneas.
@@ -108,7 +108,7 @@ El recurso principal es **comentarios**, con CRUD completo respondiendo JSON (cu
 |--------|------|------------|--------------|-------------------|
 | GET | `/api/comentarios.php` | `?page=N` (opcional) | `{ success, data: [..], page, per_page }` | 200 |
 | GET | `/api/comentarios.php?id=X` | — | `{ success, data: { comentario } }` | 200, **404** si no existe |
-| POST | `/api/comentarios.php` | JSON `{ contenido, csrf_token, "h-captcha-response" }` | `{ success, message, data: { id } }` | **201** al crear, 401, **422** datos inválidos, 500 |
+| POST | `/api/comentarios.php` | JSON `{ contenido, csrf_token }` | `{ success, message, data: { id } }` | **201** al crear, 401, **422** datos inválidos, 500 |
 | PUT | `/api/comentarios.php?id=X` | JSON `{ contenido, csrf_token }` | `{ success, message }` | 200, 401, 403, **404**, **422**, 500 |
 | DELETE | `/api/comentarios.php?id=X` | JSON `{ csrf_token }` | `{ success, message }` | 200, 401, 403, **404**, 500 |
 
@@ -149,8 +149,8 @@ Todas las credenciales y claves se leen con `getenv()` desde `.env` (no hay valo
 | Servicio | Quién lo llama | Por qué | Datos personales que salen | Qué pasa si falla (degradación elegante, R5) |
 |----------|----------------|---------|----------------------------|----------------------------------------------|
 | **Resend** (email transaccional) | **Backend** (PHP) | Enviar correos (bienvenida, notificaciones) desde el servidor. Se requiere que al menos un servicio externo se llame desde el backend (R4). | Dirección de correo del destinatario y contenido del mensaje → `api.resend.com` | Si `RESEND_API_KEY` no está configurada o la petición falla, `resend_send_email()` devuelve `success => false` y la app **sigue funcionando** (solo se registra en los logs). |
-| **Open-Meteo** (clima) | **Backend** (PHP) | Mostrar el clima actual en el perfil del usuario. Servicio gratuito, sin API key. | Latitud y longitud del usuario → `api.open-meteo.com` | Si el servicio no responde, `weather_get_current()` devuelve `success => false` y la app **sigue funcionando** sin el dato del clima. |
-| hCaptcha | Backend + Frontend | Verificación anti-bot en formularios. | Token de challenge → `api.hcaptcha.com` | Si falla, se bloquea la creación del comentario con mensaje de error al usuario. |
+| **Open-Meteo** (clima) | **Backend** (PHP) | Mostrar el clima actual en el menú principal usando la ubicación aproximada de la IP. Servicio gratuito, sin API key. | IP para geolocalización → `ipwho.is`/`ip-api.com`; latitud y longitud → `api.open-meteo.com` | Si la geolocalización falla se usan coordenadas de fallback y, si el clima no responde, la aplicación continúa funcionando y reintenta desde el navegador. |
+| hCaptcha | Backend + Frontend | Verificación anti-bot opcional en login y registro. | Token de challenge → `api.hcaptcha.com` | Si no hay claves, el challenge se desactiva y la autenticación básica sigue funcionando; si está configurado y falla, se informa el error. |
 | Google OAuth | Backend | Login con cuenta de Google (opcional). | Perfil de Google → `oauth2.googleapis.com` | Si falla, el usuario puede usar login con email/contraseña. |
 
 **Decisión de diseño:** Resend y Open-Meteo se llaman desde el **backend** para no exponer claves ni datos sensibles en el frontend (cumple R7). hCaptcha se valida en ambos extremos porque el challenge se resuelve en el navegador y se verifica en el servidor.
@@ -180,7 +180,7 @@ Para ejecutar el monitoreo de seguridad y los backups, usa `setup_security.sh` y
 - **Hosting compartido gratuito (InfinityFree):** puede bloquear peticiones que no provengan de navegadores (por ejemplo, la app Android del TP N.º 2 si intenta consumir la API como cliente no navegador). La PWA mitiga esto al ejecutarse dentro del navegador.
 - **No hay defensa oral:** la nota depende exclusivamente del entregable (URL pública, código y README).
 - **Sin WebSocket persistente:** las notificaciones se actualizan mediante sondeo corto (polling) cada 8 segundos solo en pestañas visibles, ya que InfinityFree no permite procesos persistentes.
-- **hCaptcha y Google OAuth requieren claves reales:** en local sin configurar, la creación de comentarios con hCaptcha y el login con Google no funcionarán; se puede probar el resto de la app sin ellas.
+- **hCaptcha y Google OAuth son opcionales:** sin sus claves se ocultan los controles correspondientes; se mantienen disponibles el registro/login tradicional, los comentarios, los avatares y el clima por IP.
 - **Un solo nivel de respuestas:** no se permiten respuestas a respuestas (anidación limitada a 1 nivel).
 
 Declarar estos errores suma: un error escondido resta más (rúbrica del TP).

@@ -469,18 +469,36 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
             });
         }
 
-        async function refreshComments() {
+        function applyCommentsHtml(html) {
+            if (!commentsList) {
+                return;
+            }
+
+            const hasComments = html.trim() !== '';
+            commentsList.innerHTML = html;
+            commentsList.hidden = !hasComments;
+            if (emptyComments) {
+                emptyComments.hidden = hasComments;
+            }
+            formatDynamicDates(commentsList);
+            lastCommentsHtml = html;
+        }
+
+        async function refreshComments(force = false, page = null) {
             const activeElement = document.activeElement;
             const isWriting = activeElement && activeElement.matches('textarea, input, select');
             const hasOpenCommentForm = commentsList && commentsList.querySelector('.reply-form:not([hidden]), .edit-comment-form:not([hidden])');
-            if (commentsRequestInFlight || document.hidden || !commentsList || isWriting || hasOpenCommentForm) {
-                return;
+            if (commentsRequestInFlight || !commentsList || (!force && (document.hidden || isWriting || hasOpenCommentForm))) {
+                return false;
             }
 
             commentsRequestInFlight = true;
             try {
                 const url = new URL(window.location.href);
                 url.searchParams.set('ajax', '1');
+                if (page !== null) {
+                    url.searchParams.set('page', String(page));
+                }
                 const response = await fetch(url.toString(), {
                     headers: { 'Accept': 'text/html' },
                     cache: 'no-store',
@@ -491,18 +509,14 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                 }
 
                 const html = await response.text();
-                if (html !== lastCommentsHtml) {
-                    commentsList.innerHTML = html;
-                    commentsList.hidden = html.trim() === '';
-                    if (emptyComments) {
-                        emptyComments.hidden = html.trim() !== '';
-                    }
-                    formatDynamicDates(commentsList);
-                    lastCommentsHtml = html;
+                if (force || html !== lastCommentsHtml) {
+                    applyCommentsHtml(html);
                 }
+                return true;
             } catch (error) {
                 // Un error temporal no debe impedir que el usuario siga usando la página.
                 console.warn('No se pudieron actualizar los comentarios.', error);
+                return false;
             } finally {
                 commentsRequestInFlight = false;
             }
@@ -557,27 +571,18 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 
                 try {
                     await createComment(contenido, csrfInput.value);
-                    showFlash('Comentario publicado.', 'success');
                     textarea.value = '';
 
-                    // Refrescar la lista de comentarios sin recargar (AJAX)
-                    const resp = await fetch(window.location.pathname + '?ajax=1&page=1', {
-                        headers: { 'Accept': 'text/html' },
-                        credentials: 'same-origin',
-                        cache: 'no-store',
-                    });
-                    if (resp.ok) {
-                        const html = await resp.text();
-                        const list = document.getElementById('comments-list');
-                        const empty = document.getElementById('empty-comments');
-                        if (list) {
-                            list.innerHTML = html;
-                            list.hidden = html.trim() === '';
-                        }
-                        if (empty) {
-                            empty.hidden = html.trim() !== '';
-                        }
-                    }
+                    // Forzar la sincronización después del 201 para que el
+                    // comentario aparezca inmediatamente, aun si el foco sigue
+                    // en el textarea o la pestaña estaba en una página vacía.
+                    const commentsUpdated = await refreshComments(true, 1);
+                    showFlash(
+                        commentsUpdated
+                            ? 'Comentario publicado.'
+                            : 'Comentario publicado. La lista se actualizará en breve.',
+                        'success'
+                    );
                 } catch (error) {
                     showFlash(error.message || 'No se pudo publicar el comentario.', 'error');
                 } finally {
@@ -588,24 +593,36 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         }
 
         // --- Clima en una esquina (Open-Meteo + geolocalización por IP, backend) ---
+        let weatherRetryTimer = null;
         async function fetchWeather() {
             try {
-                const resp = await fetch('/api/weather.php', {
+                const resp = await fetch('api/weather.php', {
                     headers: { 'Accept': 'application/json' },
                     credentials: 'same-origin',
                     cache: 'no-store',
                 });
-                if (!resp.ok) return;
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
                 const data = await resp.json();
-                if (!data.success || !data.data) return;
+                if (!data.success || !data.data) throw new Error('Respuesta de clima inválida');
                 const w = data.data;
                 const icon = w.weathercode <= 1 ? '☀️' : w.weathercode <= 3 ? '⛅' : '☁️';
                 document.getElementById('weatherIcon').textContent = icon;
                 document.getElementById('weatherTemp').textContent = Math.round(w.temperature) + '°';
                 document.getElementById('weatherCity').textContent = data.location?.city || 'Desconocida';
                 document.getElementById('weatherWidget').hidden = false;
+                if (weatherRetryTimer !== null) {
+                    clearTimeout(weatherRetryTimer);
+                    weatherRetryTimer = null;
+                }
             } catch (_) {
-                // Si falla, el widget permanece oculto (degradación elegante)
+                // Reintentar pronto evita que un fallo transitorio oculte el
+                // clima durante toda la sesión.
+                if (weatherRetryTimer === null) {
+                    weatherRetryTimer = setTimeout(function () {
+                        weatherRetryTimer = null;
+                        fetchWeather();
+                    }, 15000);
+                }
             }
         }
         fetchWeather();

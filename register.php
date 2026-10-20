@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('register.php');
     }
 
-    if (!verify_hcaptcha((string)($_POST['h-captcha-response'] ?? ''), $_SERVER['REMOTE_ADDR'] ?? null)) {
+    if (hcaptcha_is_configured() && !verify_hcaptcha((string)($_POST['h-captcha-response'] ?? ''), $_SERVER['REMOTE_ADDR'] ?? null)) {
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Completa la verificación anti-bot.'];
         redirect('register.php');
     }
@@ -112,7 +112,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Registro</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+    <?php if (hcaptcha_is_configured()): ?>
+        <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+    <?php endif; ?>
 </head>
 <body class="auth-shell">
     <div class="card">
@@ -143,7 +145,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <span>Acepto los <a href="terminos.php" target="_blank">Términos y Condiciones</a> y la <a href="privacidad.php" target="_blank">Política de Privacidad</a></span>
                 </label>
             </div>
-            <div class="h-captcha" data-sitekey="<?= e($hcaptchaSitekey); ?>"></div>
+            <?php if (hcaptcha_is_configured()): ?>
+                <div class="h-captcha" data-sitekey="<?= e($hcaptchaSitekey); ?>"></div>
+            <?php endif; ?>
             <button type="submit">Registrarse</button>
         </form>
         <?php if ($googleClientId !== '' && $googleClientSecret !== ''): ?>

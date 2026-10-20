@@ -26,12 +26,16 @@ if (!is_logged_in()) {
     action_error('Debes iniciar sesión para realizar esta acción.');
 }
 
+$action = (string)($_POST['action'] ?? '');
+
 if (!csrf_valid($_POST['csrf_token'] ?? null)) {
     action_error('Token CSRF inválido.');
 }
 
-// Validar origen de peticiones AJAX
-if (!validate_ajax_origin()) {
+// Estas acciones llegan desde formularios del mismo sitio, no únicamente
+// desde fetch. La validación también funciona cuando el navegador no envía
+// Origin/Referer, siempre respaldada por CSRF.
+if (!validate_request_origin()) {
     log_security_event('invalid_origin_attempt', "Action: {$action}");
     http_response_code(403);
     exit('Origen no permitido');
@@ -45,7 +49,6 @@ if (!validate_content_type(['application/x-www-form-urlencoded', 'multipart/form
 }
 
 $userId = (int)$_SESSION['user_id'];
-$action = (string)($_POST['action'] ?? '');
 $commentId = filter_var($_POST['comentario_id'] ?? null, FILTER_VALIDATE_INT);
 
 if ($commentId === false || $commentId === null || $commentId < 1) {
