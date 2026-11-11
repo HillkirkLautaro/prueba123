@@ -325,21 +325,38 @@ if (!function_exists('verify_hcaptcha')) {
 if (!function_exists('check_rate_limit')) {
     function check_rate_limit(string $identifier, int $maxAttempts = 5, int $windowSeconds = 300): bool
     {
-        $key = 'rate_limit_' . md5($identifier);
-        $attempts = $_SESSION[$key]['count'] ?? 0;
-        $lastAttempt = $_SESSION[$key]['time'] ?? 0;
-        
-        if (time() - $lastAttempt > $windowSeconds) {
-            $_SESSION[$key] = ['count' => 1, 'time' => time()];
-            return true;
-        }
-        
-        if ($attempts >= $maxAttempts) {
+        global $pdo;
+
+        if ($maxAttempts < 1 || $windowSeconds < 1) {
             return false;
         }
-        
-        $_SESSION[$key]['count'] = $attempts + 1;
-        return true;
+
+        $now = time();
+        $rateKey = hash('sha256', $identifier);
+        $upsert = $pdo->prepare(
+            'INSERT INTO rate_limits (rate_key, window_started_at, attempts)
+             VALUES (:rate_key, :now, 1)
+             ON DUPLICATE KEY UPDATE
+                 attempts = IF(window_started_at <= :attempt_cutoff, 1, attempts + 1),
+                 window_started_at = IF(window_started_at <= :window_cutoff, :window_start, window_started_at)'
+        );
+        $upsert->execute([
+            ':rate_key' => $rateKey,
+            ':now' => $now,
+            ':attempt_cutoff' => $now - $windowSeconds,
+            ':window_cutoff' => $now - $windowSeconds,
+            ':window_start' => $now,
+        ]);
+
+        $count = $pdo->prepare('SELECT attempts FROM rate_limits WHERE rate_key = :rate_key LIMIT 1');
+        $count->execute([':rate_key' => $rateKey]);
+
+        if (mt_rand(1, 100) === 1) {
+            $cleanup = $pdo->prepare('DELETE FROM rate_limits WHERE window_started_at < :cutoff');
+            $cleanup->execute([':cutoff' => $now - 86400]);
+        }
+
+        return (int)$count->fetchColumn() <= $maxAttempts;
     }
 }
 

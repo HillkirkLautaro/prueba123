@@ -70,6 +70,11 @@ $stmt->execute([':email' => $email]);
 $user = $stmt->fetch();
 
 if (!$user) {
+    $rateLimitKey = 'register_' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+    if (!check_rate_limit($rateLimitKey, 5, 300)) {
+        oauth_error('Se alcanzó el límite temporal de creación de cuentas. Inténtalo más tarde.');
+    }
+
     $baseUsername = preg_replace('/[^A-Za-z0-9_]/', '_', (string)strstr($email, '@', true));
     $baseUsername = trim((string)$baseUsername, '_');
     $baseUsername = substr($baseUsername, 0, 42);

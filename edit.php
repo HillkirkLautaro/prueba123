@@ -39,9 +39,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('index.php');
     }
 
-    $contenido = trim((string)($_POST['contenido'] ?? ''));
-    if ($contenido === '') {
-        $_SESSION['flash'] = ['type' => 'error', 'message' => 'El contenido no puede estar vacío.'];
+    $contenidoRaw = $_POST['contenido'] ?? null;
+    if (!is_string($contenidoRaw) || !mb_check_encoding($contenidoRaw, 'UTF-8')) {
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'El contenido debe ser texto UTF-8 válido.'];
+        redirect('edit.php?id=' . $id);
+    }
+
+    $contenido = trim($contenidoRaw);
+    if ($contenido === '' || mb_strlen($contenido, 'UTF-8') > 5000) {
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'El comentario debe tener entre 1 y 5000 caracteres válidos.'];
         redirect('edit.php?id=' . $id);
     }
 

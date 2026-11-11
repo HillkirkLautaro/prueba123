@@ -30,6 +30,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('register.php');
     }
 
+    $rateLimitKey = 'register_' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+    if (!check_rate_limit($rateLimitKey, 5, 300)) {
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Demasiados intentos de registro. Intenta de nuevo en 5 minutos.'];
+        redirect('register.php');
+    }
+
     if (!isset($_POST['accept_terms']) || $_POST['accept_terms'] !== '1') {
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Debes aceptar los Términos y Condiciones.'];
         redirect('register.php');

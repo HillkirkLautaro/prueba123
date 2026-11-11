@@ -162,6 +162,14 @@ sudo chmod 755 /var/www/html/mi_aplicacion/logs
 
 ---
 
+### Actualizar una instalación existente
+
+Antes de desplegar el nuevo código en una base de datos ya creada, aplicar la migración:
+
+```bash
+mysql -u usuario_seguro -p mi_base_de_datos < /var/www/html/mi_aplicacion/sql/rate_limits_migration.sql
+```
+
 ## 6. Configuración de .env
 
 ```bash

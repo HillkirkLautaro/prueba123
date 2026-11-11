@@ -113,10 +113,19 @@ if ($method === 'POST') {
         json_error(403, 'Token CSRF inválido.');
     }
 
-    $contenido = trim((string)($data['contenido'] ?? ''));
+    $contenidoRaw = $data['contenido'] ?? null;
+    if (!is_string($contenidoRaw) || !mb_check_encoding($contenidoRaw, 'UTF-8')) {
+        json_error(422, 'El comentario debe ser texto UTF-8 válido.');
+    }
+    $contenido = trim($contenidoRaw);
 
-    if ($contenido === '' || mb_strlen($contenido, 'UTF-8') < 1 || !mb_check_encoding($contenido, 'UTF-8') || mb_strlen($contenido, 'UTF-8') > 5000) {
+    if ($contenido === '' || mb_strlen($contenido, 'UTF-8') > 5000) {
         json_error(422, 'El comentario debe tener entre 1 y 5000 caracteres válidos.');
+    }
+
+    $rateLimitKey = 'comment_' . (int)$_SESSION['user_id'];
+    if (!check_rate_limit($rateLimitKey, 5, 60)) {
+        json_error(429, 'Demasiados comentarios. Espera un momento antes de publicar de nuevo.');
     }
 
     try {
@@ -158,9 +167,13 @@ if ($method === 'PUT') {
     }
 
     $data = request_body();
-    $contenido = trim((string)($data['contenido'] ?? ''));
-    if ($contenido === '') {
-        json_error(422, 'El contenido no puede estar vacío.');
+    $contenidoRaw = $data['contenido'] ?? null;
+    if (!is_string($contenidoRaw) || !mb_check_encoding($contenidoRaw, 'UTF-8')) {
+        json_error(422, 'El contenido debe ser texto UTF-8 válido.');
+    }
+    $contenido = trim($contenidoRaw);
+    if ($contenido === '' || mb_strlen($contenido, 'UTF-8') > 5000) {
+        json_error(422, 'El contenido debe tener entre 1 y 5000 caracteres válidos.');
     }
 
     try {
