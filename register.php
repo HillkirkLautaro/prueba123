@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/config.php';
 require __DIR__ . '/csrf.php';
+require __DIR__ . '/src/services/resend.php';
 
 if (is_logged_in()) {
     redirect('index.php');
@@ -25,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('register.php');
     }
 
-    if (!verify_hcaptcha((string)($_POST['h-captcha-response'] ?? ''), $_SERVER['REMOTE_ADDR'] ?? null)) {
+    if (hcaptcha_is_configured() && !verify_hcaptcha((string)($_POST['h-captcha-response'] ?? ''), $_SERVER['REMOTE_ADDR'] ?? null)) {
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Completa la verificación anti-bot.'];
         redirect('register.php');
     }
@@ -87,15 +88,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('register.php');
     }
 
+    $verificationToken = bin2hex(random_bytes(32));
+    $verificationTokenHash = hash('sha256', $verificationToken);
+
     try {
         $stmt = $pdo->prepare(
-            'INSERT INTO usuarios (username, email, password, created_at)
-             VALUES (:username, :email, :password, UTC_TIMESTAMP())'
+            'INSERT INTO usuarios (username, email, password, email_verification_token, email_verification_expires_at, created_at)
+             VALUES (:username, :email, :password, :verification_token, DATE_ADD(UTC_TIMESTAMP(), INTERVAL 24 HOUR), UTC_TIMESTAMP())'
         );
         $stmt->execute([
             ':username' => $username,
             ':email' => $email,
             ':password' => password_hash($password, PASSWORD_BCRYPT),
+            ':verification_token' => $verificationTokenHash,
         ]);
     } catch (PDOException $exception) {
         if ($exception->getCode() === '23000') {
@@ -106,8 +111,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         throw $exception;
     }
 
+    $baseUrl = $appUrl !== ''
+        ? $appUrl
+        : (($isHttps ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? 'localhost')
+            . rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/'));
+    $verificationUrl = $baseUrl . '/verify_email.php?token=' . rawurlencode($verificationToken);
+    $verificationSent = false;
+    if (resend_is_configured()) {
+        $verificationEmail = resend_send_verification_email($email, $username, $verificationUrl);
+        $verificationSent = ($verificationEmail['success'] ?? false) === true;
+        if (!$verificationSent) {
+            error_log('Verification email unavailable: ' . ($verificationEmail['error'] ?? 'error desconocido'));
+        }
+    }
+
+    if (!$verificationSent) {
+        // Resend es opcional: no bloquear el uso normal si no está configurado
+        // o si su servicio presenta una falla temporal.
+        $activate = $pdo->prepare(
+            'UPDATE usuarios
+             SET email_verified_at = UTC_TIMESTAMP(),
+                 email_verification_token = NULL,
+                 email_verification_expires_at = NULL
+             WHERE username = :username AND email_verified_at IS NULL'
+        );
+        $activate->execute([':username' => $username]);
+    }
+
     session_regenerate_id(true);
-    $_SESSION['flash'] = ['type' => 'success', 'message' => 'Registro exitoso. Inicia sesión.'];
+    $_SESSION['flash'] = [
+        'type' => 'success',
+        'message' => $verificationSent
+            ? 'Registro exitoso. Revisa tu correo para verificar la cuenta antes de iniciar sesión.'
+            : 'Registro exitoso. La verificación por correo no está disponible; tu cuenta fue habilitada.',
+    ];
     redirect('login.php');
 }
 ?>
@@ -117,8 +154,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Registro</title>
-    <link rel="stylesheet" href="styles.css">
-    <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+    <script nonce="<?= e($cspNonce); ?>">if (localStorage.getItem('darkMode') === 'true') document.documentElement.classList.add('dark-mode');</script>
+    <link rel="stylesheet" href="styles.css?v=6">
+    <?php if (hcaptcha_is_configured()): ?>
+        <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+    <?php endif; ?>
 </head>
 <body class="auth-shell">
     <div class="card">
@@ -149,7 +189,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <span>Acepto los <a href="terminos.php" target="_blank">Términos y Condiciones</a> y la <a href="privacidad.php" target="_blank">Política de Privacidad</a></span>
                 </label>
             </div>
-            <div class="h-captcha" data-sitekey="<?= e($hcaptchaSitekey); ?>"></div>
+            <?php if (hcaptcha_is_configured()): ?>
+                <div class="h-captcha" data-sitekey="<?= e($hcaptchaSitekey); ?>"></div>
+            <?php endif; ?>
             <button type="submit">Registrarse</button>
         </form>
         <?php if ($googleClientId !== '' && $googleClientSecret !== ''): ?>

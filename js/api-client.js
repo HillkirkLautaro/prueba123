@@ -1,6 +1,8 @@
 // Cliente API REST para comentarios (fetch, sin recargar la página)
 // Cumple el requisito R3 del TP Integrador N.º 1.
-const API_BASE = '/api/comentarios.php';
+// Ruta relativa para que también funcione si el proyecto está dentro de una
+// subcarpeta (por ejemplo, /prueba123/ en XAMPP).
+const API_BASE = 'api/comentarios.php';
 
 /**
  * Petición genérica a la API REST.

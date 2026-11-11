@@ -65,6 +65,10 @@ function render_comment(array $comment, array $replies, string $defaultAvatar): 
         <?php endif; ?>
         <div class="replies-list" data-parent-id="<?= (int)$comment['id']; ?>">
             <?php foreach ($replies as $reply): ?><?php render_comment($reply, [], $defaultAvatar); ?><?php endforeach; ?>
+            <?php if ($replies): ?>
+                <button type="button" class="show-more-replies" hidden aria-label="Mostrar 3 respuestas más">+ <span>Ver 3 respuestas</span></button>
+                <button type="button" class="hide-replies" hidden>Dejar de mostrar respuestas</button>
+            <?php endif; ?>
         </div>
     </article>
     <?php
@@ -223,9 +227,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Comentarios</title>
-    <link rel="stylesheet" href="styles.css?v=3">
+    <link rel="stylesheet" href="styles.css?v=6">
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#2563eb">
+    <script nonce="<?= e($cspNonce); ?>">if (localStorage.getItem('darkMode') === 'true') document.documentElement.classList.add('dark-mode');</script>
     <script src="timezone.js?v=2" defer></script>
     <script src="js/api-client.js" defer></script>
 </head>
@@ -247,6 +252,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                 <span class="weather-temp" id="weatherTemp">--°</span>
                 <span class="weather-city" id="weatherCity">--</span>
             </div>
+            <span class="weather-status" id="weatherStatus" role="status" aria-live="polite">Consultando geolocalización y clima…</span>
             <?php if (is_logged_in()): ?>
                 <div>
                     <span class="muted">Hola, <?= e($_SESSION['username']); ?></span>
@@ -273,6 +279,22 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                                 <input type="hidden" name="csrf_token" value="<?= e(csrf_token()); ?>">
                                 <button type="submit" class="btn btn-secondary">Marcar como leídas</button>
                             </form>
+                        </div>
+                    </div>
+                    <div class="settings-menu">
+                        <button type="button" class="settings-button" id="settingsButton" aria-label="Abrir configuración" aria-expanded="false">
+                            <span aria-hidden="true">⚙️</span>
+                        </button>
+                        <div class="settings-dropdown" id="settingsDropdown" hidden>
+                            <strong>Configuración</strong>
+                            <label class="settings-option">
+                                <span>Modo oscuro</span>
+                                <input type="checkbox" id="darkModeToggle" role="switch">
+                            </label>
+                            <label class="settings-option">
+                                <span>Mostrar respuestas</span>
+                                <input type="checkbox" id="repliesVisibilityToggle" role="switch" checked>
+                            </label>
                         </div>
                     </div>
                     <a class="btn btn-secondary" href="profile.php?id=<?= (int)$_SESSION['user_id']; ?>">Mi perfil</a>
@@ -346,6 +368,64 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         const notificationCount = document.getElementById('notificationCount');
         const notificationList = document.getElementById('notificationList');
         const notificationStatus = document.getElementById('notificationStatus');
+        const settingsButton = document.getElementById('settingsButton');
+        const settingsDropdown = document.getElementById('settingsDropdown');
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        const repliesVisibilityToggle = document.getElementById('repliesVisibilityToggle');
+
+        function updateRepliesVisibility() {
+            const hideReplies = localStorage.getItem('repliesHidden') === 'true';
+            document.querySelectorAll('.replies-list').forEach(function (list) {
+                const replies = Array.from(list.querySelectorAll(':scope > .comment-reply'));
+                const showMoreButton = list.querySelector(':scope > .show-more-replies');
+                const hideRepliesButton = list.querySelector(':scope > .hide-replies');
+                const isManuallyCollapsed = list.dataset.repliesCollapsed === 'true';
+                if (!hideReplies && !isManuallyCollapsed) {
+                    replies.forEach(function (reply) { reply.hidden = false; });
+                    if (showMoreButton) showMoreButton.hidden = true;
+                    if (hideRepliesButton) hideRepliesButton.hidden = replies.length === 0;
+                    return;
+                }
+
+                const visibleReplies = Number(list.dataset.visibleReplies || 0);
+                replies.forEach(function (reply, index) { reply.hidden = index >= visibleReplies; });
+                if (hideRepliesButton) hideRepliesButton.hidden = visibleReplies === 0;
+                if (showMoreButton) {
+                    const remaining = replies.length - visibleReplies;
+                    showMoreButton.hidden = remaining <= 0;
+                    showMoreButton.querySelector('span').textContent = remaining > 3
+                        ? 'Ver 3 respuestas'
+                        : 'Ver ' + remaining + ' respuesta' + (remaining === 1 ? '' : 's');
+                }
+            });
+        }
+
+        if (settingsButton && settingsDropdown && darkModeToggle && repliesVisibilityToggle) {
+            const isDarkMode = localStorage.getItem('darkMode') === 'true';
+            const repliesHidden = localStorage.getItem('repliesHidden') === 'true';
+            darkModeToggle.checked = isDarkMode;
+            repliesVisibilityToggle.checked = !repliesHidden;
+            document.body.classList.toggle('dark-mode', isDarkMode);
+
+            settingsButton.addEventListener('click', function () {
+                settingsDropdown.hidden = !settingsDropdown.hidden;
+                settingsButton.setAttribute('aria-expanded', String(!settingsDropdown.hidden));
+            });
+            darkModeToggle.addEventListener('change', function () {
+                document.documentElement.classList.toggle('dark-mode', darkModeToggle.checked);
+                document.body.classList.toggle('dark-mode', darkModeToggle.checked);
+                localStorage.setItem('darkMode', String(darkModeToggle.checked));
+            });
+            repliesVisibilityToggle.addEventListener('change', function () {
+                localStorage.setItem('repliesHidden', String(!repliesVisibilityToggle.checked));
+                document.querySelectorAll('.replies-list').forEach(function (list) {
+                    delete list.dataset.visibleReplies;
+                    delete list.dataset.repliesCollapsed;
+                });
+                updateRepliesVisibility();
+            });
+        }
+        updateRepliesVisibility();
 
         function formatNotificationDate(dateString) {
             const normalizedDate = String(dateString).replace(' ', 'T');
@@ -446,6 +526,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                     dropdown.hidden = true;
                     bell.setAttribute('aria-expanded', 'false');
                 }
+                if (!event.target.closest('.settings-menu') && settingsDropdown && settingsButton) {
+                    settingsDropdown.hidden = true;
+                    settingsButton.setAttribute('aria-expanded', 'false');
+                }
             });
 
             // InfinityFree no permite ejecutar un proceso WebSocket persistente.
@@ -469,18 +553,37 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
             });
         }
 
-        async function refreshComments() {
+        function applyCommentsHtml(html) {
+            if (!commentsList) {
+                return;
+            }
+
+            const hasComments = html.trim() !== '';
+            commentsList.innerHTML = html;
+            commentsList.hidden = !hasComments;
+            if (emptyComments) {
+                emptyComments.hidden = hasComments;
+            }
+            formatDynamicDates(commentsList);
+            updateRepliesVisibility();
+            lastCommentsHtml = html;
+        }
+
+        async function refreshComments(force = false, page = null) {
             const activeElement = document.activeElement;
             const isWriting = activeElement && activeElement.matches('textarea, input, select');
             const hasOpenCommentForm = commentsList && commentsList.querySelector('.reply-form:not([hidden]), .edit-comment-form:not([hidden])');
-            if (commentsRequestInFlight || document.hidden || !commentsList || isWriting || hasOpenCommentForm) {
-                return;
+            if (commentsRequestInFlight || !commentsList || (!force && (document.hidden || isWriting || hasOpenCommentForm))) {
+                return false;
             }
 
             commentsRequestInFlight = true;
             try {
                 const url = new URL(window.location.href);
                 url.searchParams.set('ajax', '1');
+                if (page !== null) {
+                    url.searchParams.set('page', String(page));
+                }
                 const response = await fetch(url.toString(), {
                     headers: { 'Accept': 'text/html' },
                     cache: 'no-store',
@@ -491,18 +594,14 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
                 }
 
                 const html = await response.text();
-                if (html !== lastCommentsHtml) {
-                    commentsList.innerHTML = html;
-                    commentsList.hidden = html.trim() === '';
-                    if (emptyComments) {
-                        emptyComments.hidden = html.trim() !== '';
-                    }
-                    formatDynamicDates(commentsList);
-                    lastCommentsHtml = html;
+                if (force || html !== lastCommentsHtml) {
+                    applyCommentsHtml(html);
                 }
+                return true;
             } catch (error) {
                 // Un error temporal no debe impedir que el usuario siga usando la página.
                 console.warn('No se pudieron actualizar los comentarios.', error);
+                return false;
             } finally {
                 commentsRequestInFlight = false;
             }
@@ -518,6 +617,24 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         }
 
         document.addEventListener('click', function (event) {
+            const showMoreReplies = event.target.closest('.show-more-replies');
+            if (showMoreReplies) {
+                const list = showMoreReplies.closest('.replies-list');
+                list.dataset.repliesCollapsed = 'true';
+                list.dataset.visibleReplies = String(Number(list.dataset.visibleReplies || 0) + 3);
+                updateRepliesVisibility();
+                return;
+            }
+
+            const hideReplies = event.target.closest('.hide-replies');
+            if (hideReplies) {
+                const list = hideReplies.closest('.replies-list');
+                list.dataset.repliesCollapsed = 'true';
+                list.dataset.visibleReplies = '0';
+                updateRepliesVisibility();
+                return;
+            }
+
             const toggle = event.target.closest('.reply-toggle');
             if (toggle) {
                 const form = document.getElementById(toggle.dataset.target);
@@ -557,27 +674,18 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
 
                 try {
                     await createComment(contenido, csrfInput.value);
-                    showFlash('Comentario publicado.', 'success');
                     textarea.value = '';
 
-                    // Refrescar la lista de comentarios sin recargar (AJAX)
-                    const resp = await fetch(window.location.pathname + '?ajax=1&page=1', {
-                        headers: { 'Accept': 'text/html' },
-                        credentials: 'same-origin',
-                        cache: 'no-store',
-                    });
-                    if (resp.ok) {
-                        const html = await resp.text();
-                        const list = document.getElementById('comments-list');
-                        const empty = document.getElementById('empty-comments');
-                        if (list) {
-                            list.innerHTML = html;
-                            list.hidden = html.trim() === '';
-                        }
-                        if (empty) {
-                            empty.hidden = html.trim() !== '';
-                        }
-                    }
+                    // Forzar la sincronización después del 201 para que el
+                    // comentario aparezca inmediatamente, aun si el foco sigue
+                    // en el textarea o la pestaña estaba en una página vacía.
+                    const commentsUpdated = await refreshComments(true, 1);
+                    showFlash(
+                        commentsUpdated
+                            ? 'Comentario publicado.'
+                            : 'Comentario publicado. La lista se actualizará en breve.',
+                        'success'
+                    );
                 } catch (error) {
                     showFlash(error.message || 'No se pudo publicar el comentario.', 'error');
                 } finally {
@@ -588,28 +696,67 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === '1') {
         }
 
         // --- Clima en una esquina (Open-Meteo + geolocalización por IP, backend) ---
+        let weatherRetryTimer = null;
+        let weatherRequestInFlight = false;
+        let weatherRetryAttempt = 0;
+        const weatherStatus = document.getElementById('weatherStatus');
+
+        function setWeatherStatus(message, isError = false) {
+            if (!weatherStatus) return;
+            weatherStatus.textContent = message;
+            weatherStatus.classList.toggle('is-error', isError);
+        }
+
+        function scheduleWeatherFetch(delay) {
+            if (weatherRetryTimer !== null) clearTimeout(weatherRetryTimer);
+            weatherRetryTimer = setTimeout(function () {
+                weatherRetryTimer = null;
+                fetchWeather();
+            }, delay);
+        }
+
         async function fetchWeather() {
+            if (weatherRequestInFlight) return;
+            weatherRequestInFlight = true;
+            setWeatherStatus(weatherRetryAttempt > 0
+                ? 'Reintentando geolocalización y clima…'
+                : 'Consultando geolocalización y clima…');
             try {
-                const resp = await fetch('/api/weather.php', {
+                const resp = await fetch('api/weather.php', {
                     headers: { 'Accept': 'application/json' },
                     credentials: 'same-origin',
                     cache: 'no-store',
                 });
-                if (!resp.ok) return;
                 const data = await resp.json();
-                if (!data.success || !data.data) return;
+                if (!resp.ok || !data.success || !data.data) {
+                    throw new Error(data.status?.weather?.message || data.error || 'Respuesta de clima inválida');
+                }
                 const w = data.data;
                 const icon = w.weathercode <= 1 ? '☀️' : w.weathercode <= 3 ? '⛅' : '☁️';
                 document.getElementById('weatherIcon').textContent = icon;
                 document.getElementById('weatherTemp').textContent = Math.round(w.temperature) + '°';
                 document.getElementById('weatherCity').textContent = data.location?.city || 'Desconocida';
                 document.getElementById('weatherWidget').hidden = false;
-            } catch (_) {
-                // Si falla, el widget permanece oculto (degradación elegante)
+                const locationState = data.status?.geolocation?.message || 'Ubicación actualizada.';
+                const weatherState = data.status?.weather?.message || 'Clima actualizado correctamente.';
+                setWeatherStatus('Geolocalización: ' + locationState + ' Clima: ' + weatherState,
+                    data.status?.geolocation?.success === false);
+                weatherRetryAttempt = 0;
+                scheduleWeatherFetch(600000);
+            } catch (error) {
+                // Reintentos progresivos y acotados: continúan hasta lograr
+                // una respuesta, sin saturar el servidor ni bloquear sesión.
+                weatherRetryAttempt += 1;
+                const delay = Math.min(60000, 1000 * Math.pow(2, Math.min(weatherRetryAttempt, 6)));
+                const seconds = Math.ceil(delay / 1000);
+                setWeatherStatus('Clima: ' + (error.message || 'No disponible')
+                    + '. Reintentando en ' + seconds + ' s…', true);
+                scheduleWeatherFetch(delay);
+            } finally {
+                weatherRequestInFlight = false;
             }
         }
         fetchWeather();
-        setInterval(fetchWeather, 600000);
 
     </script>
     <footer class="site-footer">

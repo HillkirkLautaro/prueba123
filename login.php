@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('login.php');
     }
 
-    if (!verify_hcaptcha((string)($_POST['h-captcha-response'] ?? ''), $_SERVER['REMOTE_ADDR'] ?? null)) {
+    if (hcaptcha_is_configured() && !verify_hcaptcha((string)($_POST['h-captcha-response'] ?? ''), $_SERVER['REMOTE_ADDR'] ?? null)) {
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Completa la verificación anti-bot.'];
         redirect('login.php');
     }
@@ -56,13 +56,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Credenciales inválidas.'];
         redirect('login.php');
     }
-    $stmt = $pdo->prepare('SELECT id, username, email, password FROM usuarios WHERE username = :username LIMIT 1');
+    $stmt = $pdo->prepare('SELECT id, username, email, password, email_verified_at FROM usuarios WHERE username = :username LIMIT 1');
     $stmt->execute([':username' => $username]);
     $user = $stmt->fetch();
 
     if (!$user || !password_verify($password, $user['password'])) {
         log_security_event('login_failed', "Username: {$username}");
         $_SESSION['flash'] = ['type' => 'error', 'message' => 'Credenciales incorrectas.'];
+        redirect('login.php');
+    }
+
+    if ($user['email_verified_at'] === null) {
+        $_SESSION['flash'] = ['type' => 'error', 'message' => 'Verifica tu correo electrónico antes de iniciar sesión.'];
         redirect('login.php');
     }
 
@@ -83,8 +88,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Login</title>
-    <link rel="stylesheet" href="styles.css">
-    <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+    <script nonce="<?= e($cspNonce); ?>">if (localStorage.getItem('darkMode') === 'true') document.documentElement.classList.add('dark-mode');</script>
+    <link rel="stylesheet" href="styles.css?v=6">
+    <?php if (hcaptcha_is_configured()): ?>
+        <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+    <?php endif; ?>
 </head>
 <body class="auth-shell">
     <div class="card">
@@ -105,7 +113,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <label for="password">Contraseña</label>
                 <input id="password" type="password" name="password" required>
             </div>
-            <div class="h-captcha" data-sitekey="<?= e($hcaptchaSitekey); ?>"></div>
+            <?php if (hcaptcha_is_configured()): ?>
+                <div class="h-captcha" data-sitekey="<?= e($hcaptchaSitekey); ?>"></div>
+            <?php endif; ?>
             <button type="submit">Entrar</button>
         </form>
         <?php if ($googleClientId !== '' && $googleClientSecret !== ''): ?>
