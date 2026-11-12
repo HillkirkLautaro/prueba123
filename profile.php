@@ -14,7 +14,7 @@ if ($userId === false || $userId === null || $userId < 1) {
     redirect('index.php');
 }
 
-$profileUser = $pdo->prepare('SELECT id, username, email, avatar FROM usuarios WHERE id = :id LIMIT 1');
+$profileUser = $pdo->prepare('SELECT id, username, avatar FROM usuarios WHERE id = :id LIMIT 1');
 $profileUser->execute([':id' => $userId]);
 $profile = $profileUser->fetch();
 
@@ -32,6 +32,12 @@ $statsStmt->execute([':usuario_id' => $userId]);
 $stats = $statsStmt->fetch() ?: ['comment_count' => 0, 'received_likes' => 0];
 
 $isOwner = is_logged_in() && (int)$profile['id'] === (int)$_SESSION['user_id'];
+$profileEmail = 'No disponible públicamente';
+if ($isOwner) {
+    $emailStmt = $pdo->prepare('SELECT email FROM usuarios WHERE id = :id LIMIT 1');
+    $emailStmt->execute([':id' => $userId]);
+    $profileEmail = (string)($emailStmt->fetchColumn() ?: 'No disponible públicamente');
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$isOwner) {
@@ -205,7 +211,7 @@ if (!empty($profile['avatar']) && is_string($profile['avatar'])) {
                 <img class="avatar" src="<?= e($avatar); ?>" alt="Avatar de <?= e($profile['username']); ?>">
                 <div>
                     <h1><?= e($profile['username']); ?></h1>
-                    <div class="profile-meta">Email: <?= e($profile['email']); ?></div>
+                    <div class="profile-meta">Email: <?= e($profileEmail); ?></div>
                     <div class="profile-meta">Comentarios: <?= (int)$stats['comment_count']; ?> · Me gusta recibidos: <?= (int)$stats['received_likes']; ?></div>
                     <?php if ($isOwner): ?>
                         <div class="profile-meta">Este es tu perfil.</div>
