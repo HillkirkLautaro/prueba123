@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Obtener el código más reciente
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Sincronizar archivos por FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
