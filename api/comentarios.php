@@ -6,10 +6,12 @@ require __DIR__ . '/../config.php';
 require __DIR__ . '/../csrf.php';
 
 header('Content-Type: application/json; charset=utf-8');
+header('X-Content-Type-Options: nosniff');
+header('Cache-Control: no-store, max-age=0');
 
-$method = $_SERVER['REQUEST_METHOD'];
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 if ($method === 'POST' && !empty($_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE'])) {
-    $override = strtoupper(trim($_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE']));
+    $override = strtoupper(trim((string)$_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE']));
     if (in_array($override, ['PUT', 'DELETE'], true)) {
         $method = $override;
     }
@@ -24,7 +26,8 @@ function json_response(int $code, array $data): void
 {
     http_response_code($code);
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    header('X-Content-Type-Options: nosniff');
+    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
     exit;
 }
 
@@ -54,34 +57,102 @@ function request_body(): array
 }
 
 /**
- * Autentica la petición:
- * - App Android: Authorization: Bearer <google_id_token> (o X-Auth-Token)
- * - Web: Sesión PHP + token CSRF
+ * Extrae el token Bearer / X-Auth-Token compatible con Apache/InfinityFree.
  */
-function authenticate_api_request(PDO $pdo, array $bodyData, bool $requireCsrf = true): int
+function extract_bearer_token(): string
 {
     $authHeader = $_SERVER['HTTP_AUTHORIZATION']
         ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
         ?? ($_SERVER['HTTP_X_AUTH_TOKEN'] ?? '');
 
-    $idToken = '';
-    if (preg_match('/^Bearer\s+(.+)$/i', trim($authHeader), $matches)) {
-        $idToken = trim($matches[1]);
-    } elseif (trim($authHeader) !== '') {
-        $idToken = trim($authHeader);
+    if ($authHeader === '' && function_exists('apache_request_headers')) {
+        $headers = apache_request_headers();
+        if (is_array($headers)) {
+            foreach ($headers as $key => $val) {
+                if (strcasecmp((string)$key, 'Authorization') === 0 || strcasecmp((string)$key, 'X-Auth-Token') === 0) {
+                    $authHeader = (string)$val;
+                    break;
+                }
+            }
+        }
     }
 
-    if ($idToken !== '') {
-        $verifyUrl = 'https://oauth2.googleapis.com/tokeninfo?id_token=' . urlencode($idToken);
-        $ctx = stream_context_create(['http' => ['timeout' => 5, 'ignore_errors' => true]]);
-        $resp = @file_get_contents($verifyUrl, false, $ctx);
-        $payload = $resp ? json_decode($resp, true) : null;
+    $trimmed = trim((string)$authHeader);
+    if (preg_match('/^Bearer\s+(.+)$/i', $trimmed, $matches)) {
+        return trim($matches[1]);
+    }
+    return $trimmed;
+}
 
-        if (!is_array($payload) || empty($payload['email']) || ($payload['email_verified'] ?? '') !== 'true') {
-            json_error(401, 'Token de Google inválido o expirado.');
+/**
+ * Valida un Google ID Token (Firebase Auth / Google Sign-In) usando tokeninfo.
+ */
+function verify_google_token_payload(string $idToken): ?array
+{
+    $verifyUrl = 'https://oauth2.googleapis.com/tokeninfo?id_token=' . rawurlencode($idToken);
+
+    if (function_exists('curl_init')) {
+        $ch = curl_init($verifyUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 6,
+            CURLOPT_CONNECTTIMEOUT => 4,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_HTTPHEADER => ['Accept: application/json'],
+        ]);
+        $resp = curl_exec($ch);
+        curl_close($ch);
+        if (is_string($resp) && $resp !== '') {
+            $decoded = json_decode($resp, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+    }
+
+    $ctx = stream_context_create([
+        'http' => [
+            'method' => 'GET',
+            'timeout' => 6,
+            'ignore_errors' => true,
+            'header' => "Accept: application/json\r\n",
+        ],
+    ]);
+    $resp = @file_get_contents($verifyUrl, false, $ctx);
+    $decoded = is_string($resp) ? json_decode($resp, true) : null;
+    return is_array($decoded) ? $decoded : null;
+}
+
+/**
+ * Resuelve el ID del usuario autenticado (via Google Bearer Token o sesión PHP).
+ * - Si $strict = false (lecturas GET): devuelve 0 si no hay token o si es invitado, sin abortar con 401.
+ * - Si $strict = true (escrituras POST/PUT/DELETE): exige autenticación válida y devuelve 401/403 si falla.
+ */
+function resolve_authenticated_user_id(PDO $pdo, bool $strict, array $bodyData = [], bool $requireCsrfForWeb = false): int
+{
+    $idToken = extract_bearer_token();
+
+    if ($idToken !== '') {
+        if (!preg_match('/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/', $idToken)) {
+            if ($strict) {
+                json_error(401, 'Formato de token de autenticación inválido.');
+            }
+            return 0;
         }
 
-        $email = $payload['email'];
+        $payload = verify_google_token_payload($idToken);
+        $emailVerified = $payload['email_verified'] ?? false;
+        $isVerified = ($emailVerified === true || $emailVerified === 'true' || $emailVerified === 1 || $emailVerified === '1');
+
+        if (!is_array($payload) || empty($payload['email']) || !$isVerified) {
+            if ($strict) {
+                json_error(401, 'Token de Google inválido o expirado.');
+            }
+            return 0;
+        }
+
+        $email = mb_substr(trim((string)$payload['email']), 0, 254);
         $stmt = $pdo->prepare('SELECT id FROM usuarios WHERE email = :email LIMIT 1');
         $stmt->execute([':email' => $email]);
         $user = $stmt->fetch();
@@ -90,13 +161,16 @@ function authenticate_api_request(PDO $pdo, array $bodyData, bool $requireCsrf =
             return (int)$user['id'];
         }
 
+        // Provisionamiento automático respetando usuarios.username VARCHAR(50) NOT NULL UNIQUE
         $baseUser = preg_replace('/[^a-zA-Z0-9_]/', '', explode('@', $email)[0]);
         if ($baseUser === '') {
             $baseUser = 'usuario';
         }
-        $username = substr($baseUser, 0, 40) . '_' . random_int(100, 999);
+        $username = substr($baseUser, 0, 42) . '_' . random_int(1000, 9999);
         $randomPass = password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT);
-        $avatar = isset($payload['picture']) && is_string($payload['picture']) ? substr($payload['picture'], 0, 500) : null;
+        $avatar = (isset($payload['picture']) && is_string($payload['picture']) && filter_var($payload['picture'], FILTER_VALIDATE_URL))
+            ? substr($payload['picture'], 0, 500)
+            : null;
 
         $ins = $pdo->prepare('INSERT INTO usuarios (username, email, password, avatar, email_verified_at)
                               VALUES (:u, :e, :p, :a, UTC_TIMESTAMP())');
@@ -109,20 +183,25 @@ function authenticate_api_request(PDO $pdo, array $bodyData, bool $requireCsrf =
         return (int)$pdo->lastInsertId();
     }
 
-    if (!is_logged_in()) {
+    if (function_exists('is_logged_in') && is_logged_in()) {
+        if ($strict && $requireCsrfForWeb) {
+            $token = $_POST['csrf_token'] ?? ($bodyData['csrf_token'] ?? null);
+            if (!csrf_valid($token)) {
+                json_error(403, 'Token CSRF inválido.');
+            }
+        }
+        return (int)$_SESSION['user_id'];
+    }
+
+    if ($strict) {
         json_error(401, 'Debes iniciar sesión para realizar esta acción.');
     }
-    if ($requireCsrf) {
-        $token = $_POST['csrf_token'] ?? ($bodyData['csrf_token'] ?? null);
-        if (!csrf_valid($token)) {
-            json_error(403, 'Token CSRF inválido.');
-        }
-    }
-    return (int)$_SESSION['user_id'];
+    return 0;
 }
 
 /**
- * Obtiene recursivamente las respuestas anidadas de un comentario.
+ * Obtiene recursivamente las respuestas anidadas de un comentario,
+ * incluyendo `viewer_vote`, `replies_count` e `is_owner`.
  */
 function fetch_nested_replies(PDO $pdo, int $parentId, int $viewerId, int $depth = 0): array
 {
@@ -130,17 +209,20 @@ function fetch_nested_replies(PDO $pdo, int $parentId, int $viewerId, int $depth
         return [];
     }
 
-    $stmt = $pdo->prepare('SELECT c.id, c.usuario_id, c.parent_id, c.contenido, c.created_at, c.updated_at,
+    $stmt = $pdo->prepare("SELECT c.id, c.usuario_id, c.parent_id, c.contenido, c.created_at, c.updated_at,
                                   u.username, u.avatar,
-                                  (SELECT COUNT(*) FROM votos v WHERE v.comentario_id = c.id AND v.tipo_voto = \'like\') AS likes,
-                                  (SELECT COUNT(*) FROM votos v WHERE v.comentario_id = c.id AND v.tipo_voto = \'dislike\') AS dislikes,
+                                  (SELECT COUNT(*) FROM votos v WHERE v.comentario_id = c.id AND v.tipo_voto = 'like') AS likes,
+                                  (SELECT COUNT(*) FROM votos v WHERE v.comentario_id = c.id AND v.tipo_voto = 'dislike') AS dislikes,
                                   (SELECT v.tipo_voto FROM votos v WHERE v.comentario_id = c.id AND v.usuario_id = :viewer_id LIMIT 1) AS viewer_vote,
-                                  (SELECT COUNT(*) FROM comentarios r WHERE r.parent_id = c.id) AS replies_count
+                                  (SELECT COUNT(*) FROM comentarios r WHERE r.parent_id = c.id) AS replies_count,
+                                  CASE WHEN c.usuario_id = :viewer_owner AND :viewer_owner2 > 0 THEN 1 ELSE 0 END AS is_owner
                            FROM comentarios c
                            LEFT JOIN usuarios u ON u.id = c.usuario_id
                            WHERE c.parent_id = :parent_id
-                           ORDER BY c.created_at ASC');
+                           ORDER BY c.created_at ASC");
     $stmt->bindValue(':viewer_id', $viewerId, PDO::PARAM_INT);
+    $stmt->bindValue(':viewer_owner', $viewerId, PDO::PARAM_INT);
+    $stmt->bindValue(':viewer_owner2', $viewerId, PDO::PARAM_INT);
     $stmt->bindValue(':parent_id', $parentId, PDO::PARAM_INT);
     $stmt->execute();
     $replies = $stmt->fetchAll();
@@ -156,66 +238,78 @@ function fetch_nested_replies(PDO $pdo, int $parentId, int $viewerId, int $depth
 
 // --------------------- GET: listar o obtener uno ---------------------
 if ($method === 'GET') {
-    $viewerId = is_logged_in() ? (int)$_SESSION['user_id'] : 0;
+    try {
+        // Resuelve usuario por Bearer token (Android) o sesión PHP (Web) sin bloquear invitados
+        $viewerId = resolve_authenticated_user_id($pdo, false);
 
-    if ($id !== false && $id !== null && $id >= 1) {
-        $stmt = $pdo->prepare('SELECT c.id, c.usuario_id, c.parent_id, c.contenido, c.created_at, c.updated_at,
-                                      u.username, u.avatar,
-                                      (SELECT COUNT(*) FROM votos v WHERE v.comentario_id = c.id AND v.tipo_voto = \'like\') AS likes,
-                                      (SELECT COUNT(*) FROM votos v WHERE v.comentario_id = c.id AND v.tipo_voto = \'dislike\') AS dislikes,
-                                      (SELECT v.tipo_voto FROM votos v WHERE v.comentario_id = c.id AND v.usuario_id = :viewer_id LIMIT 1) AS viewer_vote,
-                                      (SELECT COUNT(*) FROM comentarios r WHERE r.parent_id = c.id) AS replies_count
-                               FROM comentarios c
-                               LEFT JOIN usuarios u ON u.id = c.usuario_id
-                               WHERE c.id = :id LIMIT 1');
-        $stmt->bindValue(':viewer_id', $viewerId, PDO::PARAM_INT);
-        $stmt->bindValue(':id', $id, PDO::PARAM_INT);
-        $stmt->execute();
-        $comment = $stmt->fetch();
-        if (!$comment) {
-            json_error(404, 'Comentario no encontrado.');
+        if ($id !== false && $id !== null && $id >= 1) {
+            $stmt = $pdo->prepare("SELECT c.id, c.usuario_id, c.parent_id, c.contenido, c.created_at, c.updated_at,
+                                          u.username, u.avatar,
+                                          (SELECT COUNT(*) FROM votos v WHERE v.comentario_id = c.id AND v.tipo_voto = 'like') AS likes,
+                                          (SELECT COUNT(*) FROM votos v WHERE v.comentario_id = c.id AND v.tipo_voto = 'dislike') AS dislikes,
+                                          (SELECT v.tipo_voto FROM votos v WHERE v.comentario_id = c.id AND v.usuario_id = :viewer_id LIMIT 1) AS viewer_vote,
+                                          (SELECT COUNT(*) FROM comentarios r WHERE r.parent_id = c.id) AS replies_count,
+                                          CASE WHEN c.usuario_id = :viewer_owner AND :viewer_owner2 > 0 THEN 1 ELSE 0 END AS is_owner
+                                   FROM comentarios c
+                                   LEFT JOIN usuarios u ON u.id = c.usuario_id
+                                   WHERE c.id = :id LIMIT 1");
+            $stmt->bindValue(':viewer_id', $viewerId, PDO::PARAM_INT);
+            $stmt->bindValue(':viewer_owner', $viewerId, PDO::PARAM_INT);
+            $stmt->bindValue(':viewer_owner2', $viewerId, PDO::PARAM_INT);
+            $stmt->bindValue(':id', $id, PDO::PARAM_INT);
+            $stmt->execute();
+            $comment = $stmt->fetch();
+            if (!$comment) {
+                json_error(404, 'Comentario no encontrado.');
+            }
+
+            $comment['respuestas'] = fetch_nested_replies($pdo, (int)$comment['id'], $viewerId);
+            json_response(200, ['success' => true, 'data' => $comment]);
         }
 
-        $comment['respuestas'] = fetch_nested_replies($pdo, (int)$comment['id'], $viewerId);
-        json_response(200, ['success' => true, 'data' => $comment]);
+        $page = filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT);
+        if ($page === false || $page === null || $page < 1) {
+            $page = 1;
+        }
+        $perPage = 20;
+        $offset = ($page - 1) * $perPage;
+
+        $stmt = $pdo->prepare("SELECT c.id, c.usuario_id, c.parent_id, c.contenido, c.created_at, c.updated_at,
+                                      u.username, u.avatar,
+                                      (SELECT COUNT(*) FROM votos v WHERE v.comentario_id = c.id AND v.tipo_voto = 'like') AS likes,
+                                      (SELECT COUNT(*) FROM votos v WHERE v.comentario_id = c.id AND v.tipo_voto = 'dislike') AS dislikes,
+                                      (SELECT v.tipo_voto FROM votos v WHERE v.comentario_id = c.id AND v.usuario_id = :viewer_id LIMIT 1) AS viewer_vote,
+                                      (SELECT COUNT(*) FROM comentarios r WHERE r.parent_id = c.id) AS replies_count,
+                                      CASE WHEN c.usuario_id = :viewer_owner AND :viewer_owner2 > 0 THEN 1 ELSE 0 END AS is_owner
+                               FROM comentarios c
+                               LEFT JOIN usuarios u ON u.id = c.usuario_id
+                               WHERE c.parent_id IS NULL
+                               ORDER BY c.created_at DESC
+                               LIMIT :limit OFFSET :offset");
+        $stmt->bindValue(':viewer_id', $viewerId, PDO::PARAM_INT);
+        $stmt->bindValue(':viewer_owner', $viewerId, PDO::PARAM_INT);
+        $stmt->bindValue(':viewer_owner2', $viewerId, PDO::PARAM_INT);
+        $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
+        $comments = $stmt->fetchAll();
+
+        json_response(200, [
+            'success' => true,
+            'data' => $comments,
+            'page' => $page,
+            'per_page' => $perPage,
+        ]);
+    } catch (Throwable $e) {
+        error_log('API GET comments failed: ' . $e->getMessage());
+        json_error(500, 'Error del servidor al obtener los comentarios.');
     }
-
-    $page = filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT);
-    if ($page === false || $page === null || $page < 1) {
-        $page = 1;
-    }
-    $perPage = 20;
-    $offset = ($page - 1) * $perPage;
-
-    $stmt = $pdo->prepare('SELECT c.id, c.usuario_id, c.parent_id, c.contenido, c.created_at, c.updated_at,
-                                  u.username, u.avatar,
-                                  (SELECT COUNT(*) FROM votos v WHERE v.comentario_id = c.id AND v.tipo_voto = \'like\') AS likes,
-                                  (SELECT COUNT(*) FROM votos v WHERE v.comentario_id = c.id AND v.tipo_voto = \'dislike\') AS dislikes,
-                                  (SELECT v.tipo_voto FROM votos v WHERE v.comentario_id = c.id AND v.usuario_id = :viewer_id LIMIT 1) AS viewer_vote,
-                                  (SELECT COUNT(*) FROM comentarios r WHERE r.parent_id = c.id) AS replies_count
-                           FROM comentarios c
-                           LEFT JOIN usuarios u ON u.id = c.usuario_id
-                           WHERE c.parent_id IS NULL
-                           ORDER BY c.created_at DESC
-                           LIMIT :limit OFFSET :offset');
-    $stmt->bindValue(':viewer_id', $viewerId, PDO::PARAM_INT);
-    $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
-    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-    $stmt->execute();
-    $comments = $stmt->fetchAll();
-
-    json_response(200, [
-        'success' => true,
-        'data' => $comments,
-        'page' => $page,
-        'per_page' => $perPage,
-    ]);
 }
 
 // --------------------- POST: crear comentario o respuesta ---------------------
 if ($method === 'POST') {
     $data = request_body();
-    $userId = authenticate_api_request($pdo, $data, true);
+    $userId = resolve_authenticated_user_id($pdo, true, $data, true);
 
     $contenidoRaw = $data['contenido'] ?? null;
     if (!is_string($contenidoRaw) || !mb_check_encoding($contenidoRaw, 'UTF-8')) {
@@ -275,7 +369,7 @@ if ($method === 'PUT') {
         json_error(400, 'ID de comentario requerido.');
     }
     $data = request_body();
-    $userId = authenticate_api_request($pdo, $data, false);
+    $userId = resolve_authenticated_user_id($pdo, true, $data, false);
 
     $check = $pdo->prepare('SELECT usuario_id FROM comentarios WHERE id = :id LIMIT 1');
     $check->execute([':id' => $id]);
@@ -316,7 +410,7 @@ if ($method === 'DELETE') {
     if ($id === false || $id === null || $id < 1) {
         json_error(400, 'ID de comentario requerido.');
     }
-    $userId = authenticate_api_request($pdo, [], false);
+    $userId = resolve_authenticated_user_id($pdo, true, [], false);
 
     $check = $pdo->prepare('SELECT usuario_id FROM comentarios WHERE id = :id LIMIT 1');
     $check->execute([':id' => $id]);
