@@ -265,4 +265,4 @@ try {
         $pdo->rollBack();
     }
     error_log('API votos error: ' . $e->getMessage());
-    json_error(500, 'Error del servidor al procesar el voto.');
+    json_error(500, 'Error del servidor al procesar el voto.');}
