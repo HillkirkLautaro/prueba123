@@ -72,7 +72,7 @@ function extract_bearer_token(): string
     return $trimmed;
 }
 
-function base64url_decode_strict(string $data): string|false
+function base64url_decode_strict(string $data)
 {
     $remainder = strlen($data) % 4;
     if ($remainder !== 0) {
@@ -101,7 +101,7 @@ function verify_local_jwt_user_id(string $token): ?int
     $payload = json_decode($payloadJson, true);
 
     if (!is_array($header) || !is_array($payload) || ($payload['iss'] ?? '') !== 'prueba123.gt.tc') {
-        return null; // No es un JWT emitido por api/auth.php (es un token de Google)
+        return null;
     }
 
     if (($header['alg'] ?? '') !== 'HS256') {
@@ -115,12 +115,12 @@ function verify_local_jwt_user_id(string $token): ?int
 
     $expectedSig = hash_hmac('sha256', "$headerB64.$payloadB64", $secret, true);
     if (!hash_equals($expectedSig, $sigRaw)) {
-        return 0; // Firma manipulada
+        return 0;
     }
 
     $exp = isset($payload['exp']) ? (int)$payload['exp'] : 0;
     if ($exp > 0 && time() >= $exp) {
-        return 0; // Token expirado
+        return 0;
     }
 
     $sub = isset($payload['sub']) ? (int)$payload['sub'] : 0;
@@ -135,8 +135,8 @@ function verify_google_token_payload(string $idToken): ?array
         $ch = curl_init($verifyUrl);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 6,
-            CURLOPT_CONNECTTIMEOUT => 4,
+            CURLOPT_TIMEOUT => 4,
+            CURLOPT_CONNECTTIMEOUT => 3,
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_HTTPHEADER => ['Accept: application/json'],
@@ -154,7 +154,7 @@ function verify_google_token_payload(string $idToken): ?array
     $ctx = stream_context_create([
         'http' => [
             'method' => 'GET',
-            'timeout' => 6,
+            'timeout' => 4,
             'ignore_errors' => true,
             'header' => "Accept: application/json\r\n",
         ],
@@ -176,7 +176,6 @@ function resolve_authenticated_user_id(PDO $pdo, bool $strict, array $bodyData =
             return 0;
         }
 
-        // 1. Verificar si es un JWT local emitido por api/auth.php
         $localUserId = verify_local_jwt_user_id($idToken);
         if ($localUserId !== null) {
             if ($localUserId < 1) {
@@ -196,7 +195,6 @@ function resolve_authenticated_user_id(PDO $pdo, bool $strict, array $bodyData =
             return $localUserId;
         }
 
-        // 2. Caso contrario, validar como Google ID Token
         $payload = verify_google_token_payload($idToken);
         $emailVerified = $payload['email_verified'] ?? false;
         $isVerified = ($emailVerified === true || $emailVerified === 'true' || $emailVerified === 1 || $emailVerified === '1');
@@ -254,39 +252,74 @@ function resolve_authenticated_user_id(PDO $pdo, bool $strict, array $bodyData =
     return 0;
 }
 
-function fetch_nested_replies(PDO $pdo, int $parentId, int $viewerId, int $depth = 0): array
+/**
+ * Carga todo el árbol de respuestas por niveles usando consultas IN (...)
+ * en lugar de recursión SQL, evitando bloqueos y ciclos infinitos en MySQL.
+ */
+function fetch_reply_tree_iterative(PDO $pdo, int $rootId, int $viewerId): array
 {
-    if ($depth > 10) {
-        return [];
+    $allRows = [];
+    $visited = [$rootId => true];
+    $frontier = [$rootId];
+
+    for ($level = 0; $level < 6 && !empty($frontier); $level++) {
+        $placeholders = implode(',', array_fill(0, count($frontier), '?'));
+        $sql = "SELECT c.id, c.usuario_id, c.parent_id, c.contenido, c.created_at, c.updated_at,
+                       u.username, u.avatar,
+                       (SELECT COUNT(*) FROM votos v WHERE v.comentario_id = c.id AND v.tipo_voto = 'like') AS likes,
+                       (SELECT COUNT(*) FROM votos v WHERE v.comentario_id = c.id AND v.tipo_voto = 'dislike') AS dislikes,
+                       (SELECT v.tipo_voto FROM votos v WHERE v.comentario_id = c.id AND v.usuario_id = ? LIMIT 1) AS viewer_vote,
+                       (SELECT COUNT(*) FROM comentarios r WHERE r.parent_id = c.id) AS replies_count,
+                       CASE WHEN c.usuario_id = ? AND ? > 0 THEN 1 ELSE 0 END AS is_owner
+                FROM comentarios c
+                LEFT JOIN usuarios u ON u.id = c.usuario_id
+                WHERE c.parent_id IN ($placeholders)
+                ORDER BY c.created_at ASC
+                LIMIT 200";
+
+        $stmt = $pdo->prepare($sql);
+        $params = array_merge([$viewerId, $viewerId, $viewerId], $frontier);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll();
+
+        $nextFrontier = [];
+        foreach ($rows as $row) {
+            $rid = (int)$row['id'];
+            if (isset($visited[$rid])) {
+                continue;
+            }
+            $visited[$rid] = true;
+            $row['respuestas'] = [];
+            $allRows[$rid] = $row;
+            $nextFrontier[] = $rid;
+        }
+        $frontier = $nextFrontier;
     }
 
-    $stmt = $pdo->prepare("SELECT c.id, c.usuario_id, c.parent_id, c.contenido, c.created_at, c.updated_at,
-                                  u.username, u.avatar,
-                                  (SELECT COUNT(*) FROM votos v WHERE v.comentario_id = c.id AND v.tipo_voto = 'like') AS likes,
-                                  (SELECT COUNT(*) FROM votos v WHERE v.comentario_id = c.id AND v.tipo_voto = 'dislike') AS dislikes,
-                                  (SELECT v.tipo_voto FROM votos v WHERE v.comentario_id = c.id AND v.usuario_id = :viewer_id LIMIT 1) AS viewer_vote,
-                                  (SELECT COUNT(*) FROM comentarios r WHERE r.parent_id = c.id) AS replies_count,
-                                  CASE WHEN c.usuario_id = :viewer_owner AND :viewer_owner2 > 0 THEN 1 ELSE 0 END AS is_owner
-                           FROM comentarios c
-                           LEFT JOIN usuarios u ON u.id = c.usuario_id
-                           WHERE c.parent_id = :parent_id
-                           ORDER BY c.created_at ASC");
-    $stmt->bindValue(':viewer_id', $viewerId, PDO::PARAM_INT);
-    $stmt->bindValue(':viewer_owner', $viewerId, PDO::PARAM_INT);
-    $stmt->bindValue(':viewer_owner2', $viewerId, PDO::PARAM_INT);
-    $stmt->bindValue(':parent_id', $parentId, PDO::PARAM_INT);
-    $stmt->execute();
-    $replies = $stmt->fetchAll();
-
-    foreach ($replies as &$reply) {
-        $replyId = (int)$reply['id'];
-        $reply['respuestas'] = fetch_nested_replies($pdo, $replyId, $viewerId, $depth + 1);
+    // Reconstruir árbol en memoria de abajo hacia arriba
+    $childrenByParent = [];
+    foreach ($allRows as $rid => $row) {
+        $pid = (int)$row['parent_id'];
+        $childrenByParent[$pid][] = $rid;
     }
-    unset($reply);
 
-    return $replies;
+    $buildBranch = function (int $parentId) use (&$buildBranch, &$allRows, &$childrenByParent): array {
+        if (empty($childrenByParent[$parentId])) {
+            return [];
+        }
+        $branch = [];
+        foreach ($childrenByParent[$parentId] as $childId) {
+            $node = $allRows[$childId];
+            $node['respuestas'] = $buildBranch($childId);
+            $branch[] = $node;
+        }
+        return $branch;
+    };
+
+    return $buildBranch($rootId);
 }
 
+// --------------------- GET: listar o obtener uno ---------------------
 if ($method === 'GET') {
     try {
         $viewerId = resolve_authenticated_user_id($pdo, false);
@@ -312,7 +345,7 @@ if ($method === 'GET') {
                 json_error(404, 'Comentario no encontrado.');
             }
 
-            $comment['respuestas'] = fetch_nested_replies($pdo, (int)$comment['id'], $viewerId);
+            $comment['respuestas'] = fetch_reply_tree_iterative($pdo, (int)$comment['id'], $viewerId);
             json_response(200, ['success' => true, 'data' => $comment]);
         }
 
@@ -355,6 +388,7 @@ if ($method === 'GET') {
     }
 }
 
+// --------------------- POST: crear comentario o respuesta ---------------------
 if ($method === 'POST') {
     $data = request_body();
     $userId = resolve_authenticated_user_id($pdo, true, $data, true);
@@ -411,6 +445,7 @@ if ($method === 'POST') {
     }
 }
 
+// --------------------- PUT: modificar ---------------------
 if ($method === 'PUT') {
     if ($id === false || $id === null || $id < 1) {
         json_error(400, 'ID de comentario requerido.');
@@ -452,6 +487,7 @@ if ($method === 'PUT') {
     }
 }
 
+// --------------------- DELETE: borrar ---------------------
 if ($method === 'DELETE') {
     if ($id === false || $id === null || $id < 1) {
         json_error(400, 'ID de comentario requerido.');
