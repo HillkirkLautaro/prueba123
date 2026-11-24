@@ -29,9 +29,6 @@ function json_error(int $code, string $message, ?array $extra = null): void
     json_response($code, $body);
 }
 
-/**
- * Extrae el token Bearer / X-Auth-Token compatible con Apache/InfinityFree.
- */
 function extract_bearer_token(): string
 {
     $authHeader = $_SERVER['HTTP_AUTHORIZATION']
@@ -57,9 +54,61 @@ function extract_bearer_token(): string
     return $trimmed;
 }
 
-/**
- * Valida un Google ID Token (Firebase Auth / Google Sign-In) usando tokeninfo.
- */
+function base64url_decode_strict(string $data): string|false
+{
+    $remainder = strlen($data) % 4;
+    if ($remainder !== 0) {
+        $data .= str_repeat('=', 4 - $remainder);
+    }
+    return base64_decode(strtr($data, '-_', '+/'), true);
+}
+
+function verify_local_jwt_user_id(string $token): ?int
+{
+    $parts = explode('.', $token);
+    if (count($parts) !== 3) {
+        return null;
+    }
+
+    [$headerB64, $payloadB64, $sigB64] = $parts;
+    $headerJson = base64url_decode_strict($headerB64);
+    $payloadJson = base64url_decode_strict($payloadB64);
+    $sigRaw = base64url_decode_strict($sigB64);
+
+    if ($headerJson === false || $payloadJson === false || $sigRaw === false) {
+        return null;
+    }
+
+    $header = json_decode($headerJson, true);
+    $payload = json_decode($payloadJson, true);
+
+    if (!is_array($header) || !is_array($payload) || ($payload['iss'] ?? '') !== 'prueba123.gt.tc') {
+        return null; // No es un JWT emitido por api/auth.php (es un token de Google)
+    }
+
+    if (($header['alg'] ?? '') !== 'HS256') {
+        return 0;
+    }
+
+    $authFile = __DIR__ . '/auth.php';
+    $secret = defined('APP_SECRET')
+        ? (string)APP_SECRET
+        : hash('sha256', $authFile . '|' . (string)($GLOBALS['db_pass'] ?? 'prueba123_secret'));
+
+    $expectedSig = hash_hmac('sha256', "$headerB64.$payloadB64", $secret, true);
+    if (!hash_equals($expectedSig, $sigRaw)) {
+        return 0; // Firma manipulada
+    }
+
+    $exp = isset($payload['exp']) ? (int)$payload['exp'] : 0;
+    if ($exp > 0 && time() >= $exp) {
+        return 0; // Token expirado
+    }
+
+    $sub = isset($payload['sub']) ? (int)$payload['sub'] : 0;
+    return $sub > 0 ? $sub : 0;
+}
+
 function verify_google_token_payload(string $idToken): ?array
 {
     $verifyUrl = 'https://oauth2.googleapis.com/tokeninfo?id_token=' . rawurlencode($idToken);
@@ -97,16 +146,6 @@ function verify_google_token_payload(string $idToken): ?array
     return is_array($decoded) ? $decoded : null;
 }
 
-/**
- * Resuelve el ID del usuario autenticado (via Google Bearer Token o sesión PHP).
- * Si el usuario de Google aún no existe en la tabla `usuarios`, lo provisiona
- * respetando exactamente las columnas y restricciones de longitud del esquema SQL:
- * - username VARCHAR(50) NOT NULL UNIQUE
- * - email VARCHAR(254) NOT NULL UNIQUE
- * - password VARCHAR(255) NOT NULL
- * - avatar VARCHAR(500) NULL
- * - email_verified_at DATETIME NULL
- */
 function resolve_authenticated_user_id(PDO $pdo, bool $strict): int
 {
     $idToken = extract_bearer_token();
@@ -119,6 +158,27 @@ function resolve_authenticated_user_id(PDO $pdo, bool $strict): int
             return 0;
         }
 
+        // 1. Verificar si es un JWT local emitido por api/auth.php
+        $localUserId = verify_local_jwt_user_id($idToken);
+        if ($localUserId !== null) {
+            if ($localUserId < 1) {
+                if ($strict) {
+                    json_error(401, 'Token de sesión local inválido o expirado.');
+                }
+                return 0;
+            }
+            $chk = $pdo->prepare('SELECT id FROM usuarios WHERE id = :id LIMIT 1');
+            $chk->execute([':id' => $localUserId]);
+            if (!$chk->fetch()) {
+                if ($strict) {
+                    json_error(401, 'Usuario no encontrado.');
+                }
+                return 0;
+            }
+            return $localUserId;
+        }
+
+        // 2. Caso contrario, validar como Google ID Token
         $payload = verify_google_token_payload($idToken);
         $emailVerified = $payload['email_verified'] ?? false;
         $isVerified = ($emailVerified === true || $emailVerified === 'true' || $emailVerified === 1 || $emailVerified === '1');
@@ -139,7 +199,6 @@ function resolve_authenticated_user_id(PDO $pdo, bool $strict): int
             return (int)$user['id'];
         }
 
-        // Generar username único <= 50 caracteres (VARCHAR(50) NOT NULL UNIQUE)
         $baseUser = preg_replace('/[^a-zA-Z0-9_]/', '', explode('@', $email)[0]);
         if ($baseUser === '') {
             $baseUser = 'usuario';
@@ -171,9 +230,6 @@ function resolve_authenticated_user_id(PDO $pdo, bool $strict): int
     return 0;
 }
 
-/**
- * Construye una URL segura para el avatar evitando Path Traversal.
- */
 function resolve_safe_avatar_url(?string $rawAvatar): string
 {
     $baseUrl = 'https://prueba123.gt.tc/';
@@ -198,9 +254,6 @@ function resolve_safe_avatar_url(?string $rawAvatar): string
     return '';
 }
 
-// =====================================================================
-// GET: Perfil propio (sin ?id) o perfil público (?id=X)
-// =====================================================================
 if ($method === 'GET') {
     try {
         $requestedId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
@@ -215,7 +268,6 @@ if ($method === 'GET') {
             json_error(400, 'ID de usuario inválido.');
         }
 
-        // Columnas exactas de `usuarios` en el esquema SQL
         $userStmt = $pdo->prepare('SELECT id, username, email, avatar, email_verified_at, created_at
                                    FROM usuarios
                                    WHERE id = :id
@@ -229,7 +281,6 @@ if ($method === 'GET') {
 
         $isOwner = ($viewerId > 0 && $viewerId === (int)$profile['id']);
 
-        // Estadísticas sobre `comentarios` y `votos` (ENUM('like','dislike'))
         $statsStmt = $pdo->prepare("SELECT
                                         (SELECT COUNT(*) FROM comentarios WHERE usuario_id = :u1) AS comment_count,
                                         (SELECT COUNT(*) FROM comentarios WHERE usuario_id = :u2 AND parent_id IS NOT NULL) AS replies_sent_count,
@@ -248,7 +299,6 @@ if ($method === 'GET') {
             'received_likes' => 0,
         ];
 
-        // Contador de notificaciones no leídas solo si es el propietario
         $unreadNotifications = 0;
         if ($isOwner) {
             $notifStmt = $pdo->prepare('SELECT COUNT(*) FROM notificaciones WHERE usuario_id = :uid AND leido = 0');
@@ -256,7 +306,6 @@ if ($method === 'GET') {
             $unreadNotifications = (int)$notifStmt->fetchColumn();
         }
 
-        // Últimos 30 comentarios/respuestas del usuario
         $commentsStmt = $pdo->prepare("SELECT c.id, c.usuario_id, c.parent_id, c.contenido, c.created_at, c.updated_at,
                                               u.username,
                                               (SELECT COUNT(*) FROM votos v WHERE v.comentario_id = c.id AND v.tipo_voto = 'like') AS likes,
@@ -301,9 +350,6 @@ if ($method === 'GET') {
     }
 }
 
-// =====================================================================
-// POST: Actualizar foto de perfil (multipart/form-data, campo `avatar`, máx 2 MB)
-// =====================================================================
 if ($method === 'POST') {
     try {
         $hasBearer = extract_bearer_token() !== '';
@@ -320,7 +366,6 @@ if ($method === 'POST') {
             }
         }
 
-        // Usa la tabla `rate_limits` vía check_rate_limit()
         $rateLimitKey = 'avatar_upload_' . $userId;
         if (!check_rate_limit($rateLimitKey, 5, 300)) {
             json_error(429, 'Demasiados cambios de avatar. Espera unos minutos.');
@@ -339,7 +384,6 @@ if ($method === 'POST') {
             json_error(422, 'La imagen debe pesar entre 1 byte y 2 MB.');
         }
 
-        // Validación real de contenido de imagen (finfo + getimagesize)
         $mime = false;
         if (class_exists('finfo')) {
             $finfo = new finfo(FILEINFO_MIME_TYPE);
@@ -390,7 +434,6 @@ if ($method === 'POST') {
             json_error(500, 'No se pudo guardar la imagen en el servidor.');
         }
 
-        // Ruta relativa <= 500 chars (usuarios.avatar VARCHAR(500))
         $avatarPath = 'uploads/avatars/' . $safeName;
         try {
             $update = $pdo->prepare('UPDATE usuarios SET avatar = :avatar WHERE id = :id LIMIT 1');
