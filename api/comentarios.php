@@ -409,10 +409,16 @@ if ($method === 'POST') {
         if ($parentIdVal === false || $parentIdVal < 1) {
             json_error(422, 'El ID del comentario padre es inválido.');
         }
-        $checkParent = $pdo->prepare('SELECT id FROM comentarios WHERE id = :pid LIMIT 1');
+
+        // Verificar que exista y que sea un comentario raíz (parent_id IS NULL)
+        $checkParent = $pdo->prepare('SELECT id, parent_id FROM comentarios WHERE id = :pid LIMIT 1');
         $checkParent->execute([':pid' => $parentIdVal]);
-        if (!$checkParent->fetch()) {
+        $parentRow = $checkParent->fetch();
+        if (!$parentRow) {
             json_error(404, 'El comentario al que intentas responder no existe.');
+        }
+        if ($parentRow['parent_id'] !== null) {
+            json_error(422, 'No se pueden agregar respuestas anidadas sobre otra respuesta.');
         }
         $parentId = $parentIdVal;
     }
