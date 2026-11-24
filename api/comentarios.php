@@ -19,9 +19,6 @@ if ($method === 'POST' && !empty($_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE'])) {
 
 $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 
-/**
- * Respuesta JSON con código de estado HTTP.
- */
 function json_response(int $code, array $data): void
 {
     http_response_code($code);
@@ -31,9 +28,6 @@ function json_response(int $code, array $data): void
     exit;
 }
 
-/**
- * Respuesta JSON de error.
- */
 function json_error(int $code, string $message, ?array $extra = null): void
 {
     $body = ['success' => false, 'error' => $message];
@@ -43,9 +37,6 @@ function json_error(int $code, string $message, ?array $extra = null): void
     json_response($code, $body);
 }
 
-/**
- * Obtiene el cuerpo JSON de la petición (soporta application/json y form-urlencoded).
- */
 function request_body(): array
 {
     $raw = file_get_contents('php://input');
@@ -56,9 +47,6 @@ function request_body(): array
     return $_POST;
 }
 
-/**
- * Extrae el token Bearer / X-Auth-Token compatible con Apache/InfinityFree.
- */
 function extract_bearer_token(): string
 {
     $authHeader = $_SERVER['HTTP_AUTHORIZATION']
@@ -84,9 +72,61 @@ function extract_bearer_token(): string
     return $trimmed;
 }
 
-/**
- * Valida un Google ID Token (Firebase Auth / Google Sign-In) usando tokeninfo.
- */
+function base64url_decode_strict(string $data): string|false
+{
+    $remainder = strlen($data) % 4;
+    if ($remainder !== 0) {
+        $data .= str_repeat('=', 4 - $remainder);
+    }
+    return base64_decode(strtr($data, '-_', '+/'), true);
+}
+
+function verify_local_jwt_user_id(string $token): ?int
+{
+    $parts = explode('.', $token);
+    if (count($parts) !== 3) {
+        return null;
+    }
+
+    [$headerB64, $payloadB64, $sigB64] = $parts;
+    $headerJson = base64url_decode_strict($headerB64);
+    $payloadJson = base64url_decode_strict($payloadB64);
+    $sigRaw = base64url_decode_strict($sigB64);
+
+    if ($headerJson === false || $payloadJson === false || $sigRaw === false) {
+        return null;
+    }
+
+    $header = json_decode($headerJson, true);
+    $payload = json_decode($payloadJson, true);
+
+    if (!is_array($header) || !is_array($payload) || ($payload['iss'] ?? '') !== 'prueba123.gt.tc') {
+        return null; // No es un JWT emitido por api/auth.php (es un token de Google)
+    }
+
+    if (($header['alg'] ?? '') !== 'HS256') {
+        return 0;
+    }
+
+    $authFile = __DIR__ . '/auth.php';
+    $secret = defined('APP_SECRET')
+        ? (string)APP_SECRET
+        : hash('sha256', $authFile . '|' . (string)($GLOBALS['db_pass'] ?? 'prueba123_secret'));
+
+    $expectedSig = hash_hmac('sha256', "$headerB64.$payloadB64", $secret, true);
+    if (!hash_equals($expectedSig, $sigRaw)) {
+        return 0; // Firma manipulada
+    }
+
+    $exp = isset($payload['exp']) ? (int)$payload['exp'] : 0;
+    if ($exp > 0 && time() >= $exp) {
+        return 0; // Token expirado
+    }
+
+    $sub = isset($payload['sub']) ? (int)$payload['sub'] : 0;
+    return $sub > 0 ? $sub : 0;
+}
+
 function verify_google_token_payload(string $idToken): ?array
 {
     $verifyUrl = 'https://oauth2.googleapis.com/tokeninfo?id_token=' . rawurlencode($idToken);
@@ -124,11 +164,6 @@ function verify_google_token_payload(string $idToken): ?array
     return is_array($decoded) ? $decoded : null;
 }
 
-/**
- * Resuelve el ID del usuario autenticado (via Google Bearer Token o sesión PHP).
- * - Si $strict = false (lecturas GET): devuelve 0 si no hay token o si es invitado, sin abortar con 401.
- * - Si $strict = true (escrituras POST/PUT/DELETE): exige autenticación válida y devuelve 401/403 si falla.
- */
 function resolve_authenticated_user_id(PDO $pdo, bool $strict, array $bodyData = [], bool $requireCsrfForWeb = false): int
 {
     $idToken = extract_bearer_token();
@@ -141,6 +176,27 @@ function resolve_authenticated_user_id(PDO $pdo, bool $strict, array $bodyData =
             return 0;
         }
 
+        // 1. Verificar si es un JWT local emitido por api/auth.php
+        $localUserId = verify_local_jwt_user_id($idToken);
+        if ($localUserId !== null) {
+            if ($localUserId < 1) {
+                if ($strict) {
+                    json_error(401, 'Token de sesión local inválido o expirado.');
+                }
+                return 0;
+            }
+            $chk = $pdo->prepare('SELECT id FROM usuarios WHERE id = :id LIMIT 1');
+            $chk->execute([':id' => $localUserId]);
+            if (!$chk->fetch()) {
+                if ($strict) {
+                    json_error(401, 'Usuario no encontrado.');
+                }
+                return 0;
+            }
+            return $localUserId;
+        }
+
+        // 2. Caso contrario, validar como Google ID Token
         $payload = verify_google_token_payload($idToken);
         $emailVerified = $payload['email_verified'] ?? false;
         $isVerified = ($emailVerified === true || $emailVerified === 'true' || $emailVerified === 1 || $emailVerified === '1');
@@ -161,7 +217,6 @@ function resolve_authenticated_user_id(PDO $pdo, bool $strict, array $bodyData =
             return (int)$user['id'];
         }
 
-        // Provisionamiento automático respetando usuarios.username VARCHAR(50) NOT NULL UNIQUE
         $baseUser = preg_replace('/[^a-zA-Z0-9_]/', '', explode('@', $email)[0]);
         if ($baseUser === '') {
             $baseUser = 'usuario';
@@ -199,10 +254,6 @@ function resolve_authenticated_user_id(PDO $pdo, bool $strict, array $bodyData =
     return 0;
 }
 
-/**
- * Obtiene recursivamente las respuestas anidadas de un comentario,
- * incluyendo `viewer_vote`, `replies_count` e `is_owner`.
- */
 function fetch_nested_replies(PDO $pdo, int $parentId, int $viewerId, int $depth = 0): array
 {
     if ($depth > 10) {
@@ -236,10 +287,8 @@ function fetch_nested_replies(PDO $pdo, int $parentId, int $viewerId, int $depth
     return $replies;
 }
 
-// --------------------- GET: listar o obtener uno ---------------------
 if ($method === 'GET') {
     try {
-        // Resuelve usuario por Bearer token (Android) o sesión PHP (Web) sin bloquear invitados
         $viewerId = resolve_authenticated_user_id($pdo, false);
 
         if ($id !== false && $id !== null && $id >= 1) {
@@ -306,7 +355,6 @@ if ($method === 'GET') {
     }
 }
 
-// --------------------- POST: crear comentario o respuesta ---------------------
 if ($method === 'POST') {
     $data = request_body();
     $userId = resolve_authenticated_user_id($pdo, true, $data, true);
@@ -363,7 +411,6 @@ if ($method === 'POST') {
     }
 }
 
-// --------------------- PUT: modificar ---------------------
 if ($method === 'PUT') {
     if ($id === false || $id === null || $id < 1) {
         json_error(400, 'ID de comentario requerido.');
@@ -405,7 +452,6 @@ if ($method === 'PUT') {
     }
 }
 
-// --------------------- DELETE: borrar ---------------------
 if ($method === 'DELETE') {
     if ($id === false || $id === null || $id < 1) {
         json_error(400, 'ID de comentario requerido.');
