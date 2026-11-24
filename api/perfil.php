@@ -54,7 +54,7 @@ function extract_bearer_token(): string
     return $trimmed;
 }
 
-function base64url_decode_strict(string $data): string|false
+function base64url_decode_strict(string $data)
 {
     $remainder = strlen($data) % 4;
     if ($remainder !== 0) {
