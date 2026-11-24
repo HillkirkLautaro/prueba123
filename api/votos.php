@@ -70,6 +70,61 @@ function extract_bearer_token(): string
     return $trimmed;
 }
 
+function base64url_decode_strict(string $data): string|false
+{
+    $remainder = strlen($data) % 4;
+    if ($remainder !== 0) {
+        $data .= str_repeat('=', 4 - $remainder);
+    }
+    return base64_decode(strtr($data, '-_', '+/'), true);
+}
+
+function verify_local_jwt_user_id(string $token): ?int
+{
+    $parts = explode('.', $token);
+    if (count($parts) !== 3) {
+        return null;
+    }
+
+    [$headerB64, $payloadB64, $sigB64] = $parts;
+    $headerJson = base64url_decode_strict($headerB64);
+    $payloadJson = base64url_decode_strict($payloadB64);
+    $sigRaw = base64url_decode_strict($sigB64);
+
+    if ($headerJson === false || $payloadJson === false || $sigRaw === false) {
+        return null;
+    }
+
+    $header = json_decode($headerJson, true);
+    $payload = json_decode($payloadJson, true);
+
+    if (!is_array($header) || !is_array($payload) || ($payload['iss'] ?? '') !== 'prueba123.gt.tc') {
+        return null; // No es un JWT emitido por api/auth.php (es un token de Google)
+    }
+
+    if (($header['alg'] ?? '') !== 'HS256') {
+        return 0;
+    }
+
+    $authFile = __DIR__ . '/auth.php';
+    $secret = defined('APP_SECRET')
+        ? (string)APP_SECRET
+        : hash('sha256', $authFile . '|' . (string)($GLOBALS['db_pass'] ?? 'prueba123_secret'));
+
+    $expectedSig = hash_hmac('sha256', "$headerB64.$payloadB64", $secret, true);
+    if (!hash_equals($expectedSig, $sigRaw)) {
+        return 0; // Firma manipulada
+    }
+
+    $exp = isset($payload['exp']) ? (int)$payload['exp'] : 0;
+    if ($exp > 0 && time() >= $exp) {
+        return 0; // Token expirado
+    }
+
+    $sub = isset($payload['sub']) ? (int)$payload['sub'] : 0;
+    return $sub > 0 ? $sub : 0;
+}
+
 function verify_google_token_payload(string $idToken): ?array
 {
     $verifyUrl = 'https://oauth2.googleapis.com/tokeninfo?id_token=' . rawurlencode($idToken);
@@ -116,6 +171,21 @@ function resolve_authenticated_user_id(PDO $pdo, array $bodyData = []): int
             json_error(401, 'Formato de token de autenticación inválido.');
         }
 
+        // 1. Verificar si es un JWT local emitido por api/auth.php
+        $localUserId = verify_local_jwt_user_id($idToken);
+        if ($localUserId !== null) {
+            if ($localUserId < 1) {
+                json_error(401, 'Token de sesión local inválido o expirado.');
+            }
+            $chk = $pdo->prepare('SELECT id FROM usuarios WHERE id = :id LIMIT 1');
+            $chk->execute([':id' => $localUserId]);
+            if (!$chk->fetch()) {
+                json_error(401, 'Usuario no encontrado.');
+            }
+            return $localUserId;
+        }
+
+        // 2. Caso contrario, validar como Google ID Token
         $payload = verify_google_token_payload($idToken);
         $emailVerified = $payload['email_verified'] ?? false;
         $isVerified = ($emailVerified === true || $emailVerified === 'true' || $emailVerified === 1 || $emailVerified === '1');
@@ -191,7 +261,6 @@ try {
         json_error(429, 'Demasiadas acciones de voto. Espera unos segundos.');
     }
 
-    // Verificar que el comentario o respuesta exista
     $checkComment = $pdo->prepare('SELECT id, usuario_id FROM comentarios WHERE id = :cid LIMIT 1');
     $checkComment->execute([':cid' => $comentarioId]);
     $targetComment = $checkComment->fetch();
@@ -213,13 +282,11 @@ try {
 
     if ($existingVote) {
         if ($existingVote['tipo_voto'] === $tipoVoto) {
-            // Mismo voto -> quitar (toggle off)
             $del = $pdo->prepare('DELETE FROM votos WHERE id = :vid');
             $del->execute([':vid' => (int)$existingVote['id']]);
             $viewerVote = null;
             $actionPerformed = 'removed';
         } else {
-            // Voto opuesto -> actualizar
             $upd = $pdo->prepare('UPDATE votos SET tipo_voto = :tipo WHERE id = :vid');
             $upd->execute([
                 ':tipo' => $tipoVoto,
@@ -229,7 +296,6 @@ try {
             $actionPerformed = 'updated';
         }
     } else {
-        // Sin voto previo -> insertar
         $ins = $pdo->prepare('INSERT INTO votos (comentario_id, usuario_id, tipo_voto) VALUES (:cid, :uid, :tipo)');
         $ins->execute([
             ':cid' => $comentarioId,
@@ -265,4 +331,5 @@ try {
         $pdo->rollBack();
     }
     error_log('API votos error: ' . $e->getMessage());
-    json_error(500, 'Error del servidor al procesar el voto.');}
+    json_error(500, 'Error del servidor al procesar el voto.');
+}
