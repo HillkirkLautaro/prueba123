@@ -84,8 +84,8 @@ try {
         if ($email === '' || mb_strlen($email, 'UTF-8') > 254 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             json_error(422, 'Ingresá un correo electrónico válido.');
         }
-        if (strlen($password) < 8 || strlen($password) > 128) {
-            json_error(422, 'La contraseña debe tener entre 8 y 128 caracteres.');
+        if (strlen($password) < 12 || strlen($password) > 128) {
+            json_error(422, 'La contraseña debe tener entre 12 y 128 caracteres.');
         }
 
         // Verificar duplicados en username o email
